@@ -1,0 +1,19 @@
+# build output
+Release/
+Debug/
+ReleasePublic/
+*.obj
+*.pdb
+*.ipdb
+*.iobj
+*.tlog
+*.log
+*.exp
+*.lib
+*.recipe
+*.lastbuildstate
+
+# visual studio
+.vs/
+*.user
+*.suo
