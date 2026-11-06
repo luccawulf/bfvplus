@@ -78,6 +78,8 @@
     <ClCompile Include="src\capture.cpp" />
     <ClCompile Include="src\sensitivity.cpp" />
     <ClCompile Include="src\replay_format.cpp" />
+    <ClCompile Include="src\replay_file.cpp" />
+    <ClCompile Include="src\replay_session.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\buddycolors.h" />

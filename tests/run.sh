@@ -3,7 +3,7 @@
 # The modules listed in PURE must not include windows.h; the DLL build compiles them with MSVC too.
 set -u
 cd "$(dirname "$0")/.."
-PURE="src/replay_format.cpp"
+PURE="src/replay_format.cpp src/replay_file.cpp src/replay_session.cpp"
 mkdir -p tests/build
 g++ -std=c++17 -Wall -Wextra -Werror -O1 -Isrc -Itests tests/*.cpp $PURE -o tests/build/bfvplus_tests || exit 1
 ./tests/build/bfvplus_tests
