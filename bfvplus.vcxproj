@@ -85,6 +85,10 @@
     <ClCompile Include="src\replay.cpp" />
     <ClCompile Include="src\replay_probe.cpp" />
     <ClCompile Include="src\replay_events.cpp" />
+    <ClCompile Include="src\replay_pose.cpp" />
+    <ClCompile Include="src\replay_track.cpp" />
+    <ClCompile Include="src\seh_read.cpp" />
+    <ClCompile Include="src\replay_read.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\buddycolors.h" />
