@@ -21,6 +21,12 @@ struct Registrar {
 template <class T> std::string show(const T& v) { std::ostringstream o; o << v; return o.str(); }
 inline std::string show(const std::string& v) { return "\"" + v + "\""; }
 inline std::string show(const char* v) { return "\"" + std::string(v) + "\""; }
+inline std::string show(const std::vector<std::string>& v)
+{
+    std::string s = "[";
+    for (size_t i = 0; i < v.size(); ++i) s += (i ? ", " : "") + show(v[i]);
+    return s + "]";
+}
 
 inline void fail(const char* file, int line, const std::string& what)
 {

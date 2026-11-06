@@ -89,6 +89,7 @@
     <ClCompile Include="src\replay_track.cpp" />
     <ClCompile Include="src\seh_read.cpp" />
     <ClCompile Include="src\replay_read.cpp" />
+    <ClCompile Include="src\replay_detail.cpp" />
     <ClCompile Include="src\replay_decode.cpp" />
   </ItemGroup>
   <ItemGroup>

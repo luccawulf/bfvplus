@@ -29,6 +29,16 @@ void ObjectTracker::sample(double t, const std::vector<LiveObject>& objects, std
 {
     std::vector<std::string> dead, born;
     std::vector<rf::Pose> rows;
+    std::vector<rf::ArmorRow> armor;
+    // Stage 2: an a row when the hit points are numbers and moved over 0.05, or the last hitter changed.
+    auto noteArmor = [&armor](const LiveObject& o, Known& k) {
+        if (!o.hasArmor || !std::isfinite(o.hp)) return;
+        if (k.hasArmor && std::fabs(o.hp - k.hp) <= 0.05f && o.lastHit == k.lastHit) return;
+        k.hasArmor = true;
+        k.hp = o.hp;
+        k.lastHit = o.lastHit;
+        armor.push_back(rf::ArmorRow{ o.netId, o.hp, o.lastHit });
+    };
     std::set<int> seen;
     for (const LiveObject& o : objects) {
         rf::Pose p = poseFromBody(o.netId, o.rows);
@@ -46,15 +56,20 @@ void ObjectTracker::sample(double t, const std::vector<LiveObject>& objects, std
             it = known_.end();
         }
         if (it == known_.end()) {
-            born.push_back(rf::oLine(t, o.netId, o.gid, o.tmpl, o.tid, o.team));
-            known_[o.netId] = Known{ o.gid, p };
+            const bool armorLine = o.hasArmor && std::isfinite(o.maxhp) && std::isfinite(o.crit);
+            born.push_back(armorLine ? rf::oLineArmor(t, o.netId, o.gid, o.tmpl, o.tid, o.team, o.maxhp, o.crit)
+                                     : rf::oLine(t, o.netId, o.gid, o.tmpl, o.tid, o.team));
+            Known& k = known_[o.netId];
+            k = Known{ o.gid, p };
             rows.push_back(p);
+            noteArmor(o, k);
             continue;
         }
         if (moved(it->second.pose, p) || turned(it->second.pose, p)) {
             it->second.pose = p;
             rows.push_back(p);
         }
+        noteArmor(o, it->second);
     }
     for (auto it = known_.begin(); it != known_.end();) {
         if (seen.count(it->first)) { ++it; continue; }
@@ -66,6 +81,7 @@ void ObjectTracker::sample(double t, const std::vector<LiveObject>& objects, std
     for (auto& l : dead) lines.push_back(l);
     for (auto& l : born) lines.push_back(l);
     if (!rows.empty()) lines.push_back(rf::sLine(t, rows));
+    if (!armor.empty()) lines.push_back(rf::aLine(t, armor));
 }
 
 void PlayerTracker::sample(double t, const std::vector<LivePlayer>& players, std::vector<std::string>& lines)
