@@ -16,6 +16,7 @@
 #include "buddycolors.h"
 #include "capture.h"
 #include "sensitivity.h"
+#include "replay_settings.h"
 
 #include <string>
 #include <vector>
@@ -142,6 +143,13 @@ static void writeDefaultIni(const std::string& path)
     f << "; Use your Infantry mouse sensitivity instead of LandSea while on a\n";
     f << "; stationary MG, so it does not change feel when you mount one.\n";
     f << "stationaryMGInfSensitivity = off\n";
+    f << "\n";
+    f << "[replay]\n";
+    f << "; Record each game you join to replays\\replay_<time>.ndjson (BF42++'s format)\n";
+    f << "; for the replay viewer. off = disabled (default), on = enabled.\n";
+    f << "recordReplays = off\n";
+    f << "; Object samples per second, 1-30 (BF42++ uses 10).\n";
+    f << "sampleHz = 10\n";
     f.close();
 }
 
@@ -205,6 +213,11 @@ void loadConfig()
             continue;
         }
 
+
+        if (section == "replay") {
+            applyReplaySetting(g_replay, key, value);
+            continue;
+        }
 
         if (section == "sensitivity") {
             std::string k = key, v = value;

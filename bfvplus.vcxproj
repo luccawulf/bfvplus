@@ -80,6 +80,7 @@
     <ClCompile Include="src\replay_format.cpp" />
     <ClCompile Include="src\replay_file.cpp" />
     <ClCompile Include="src\replay_session.cpp" />
+    <ClCompile Include="src\replay_settings.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\buddycolors.h" />
