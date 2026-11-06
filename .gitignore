@@ -17,3 +17,4 @@ ReleasePublic/
 .vs/
 *.user
 *.suo
+tests/build/
