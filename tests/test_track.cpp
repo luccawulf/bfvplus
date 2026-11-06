@@ -133,6 +133,22 @@ TEST(tracker_skips_bad_pose)
     for (auto& l : lines) CHECK(l.find("nan") == std::string::npos && l.find("602") == std::string::npos);
 }
 
+TEST(tracker_bad_pose_known_object_kept)
+{
+    // One bad sample of a known object leaves out its row only: no d, no fresh o.
+    ObjectTracker tr;
+    std::vector<std::string> lines;
+    tr.sample(1.0, { obj(600, 800) }, lines);
+    lines.clear();
+    LiveObject bad = obj(600, 800);
+    bad.rows[12] = NAN;
+    tr.sample(1.1, { bad }, lines);
+    CHECK(lines.empty());
+    tr.sample(1.2, { obj(600, 800.5f) }, lines);
+    CHECK_EQ(count(lines, "o"), 0);
+    CHECK_EQ(count(lines, "s"), 1);
+}
+
 static LivePlayer pl(int pid, int team, bool local = false)
 {
     LivePlayer p{};

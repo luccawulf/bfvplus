@@ -71,6 +71,31 @@ TEST(file_buffers_until_2s)
     f.close();
 }
 
+TEST(file_open_never_truncates)
+{
+    std::string path = tempDir() + "/x.ndjson";
+    { std::ofstream f(path); f << "keep"; }
+    ReplayFile r;
+    CHECK(!r.create(path));
+    CHECK_EQ(slurp(path), std::string("keep"));
+}
+
+TEST(end_not_before_last_sample)
+{
+    // Samples go on for up to 30 s after the last event or local player; the end line must not
+    // carry a time before the last record written.
+    std::string dir = tempDir() + "/replays";
+    ReplaySession s(cfg(dir));
+    s.onEvent(0, tm0(), true);
+    s.onFrame(0, true);
+    bool due = s.onFrame(5000, false);
+    CHECK(due);
+    s.write("{\"k\":\"d\",\"t\":5.000,\"id\":1}");
+    s.close();
+    auto lines = linesOf(s.path());
+    if (!lines.empty()) CHECK_EQ(lines.back(), std::string("{\"k\":\"end\",\"t\":5.000}"));
+}
+
 TEST(file_open_fails_cleanly)
 {
     ReplayFile f;

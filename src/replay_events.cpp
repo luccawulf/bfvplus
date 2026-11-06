@@ -63,7 +63,9 @@ EventDecoder::EventDecoder(NameLookup lookup) : lookup_(std::move(lookup)) {}
 bool EventDecoder::line(int type, const uint8_t* payload, size_t n, double t, std::string& out)
 {
     const Payload P{ payload, payload ? n : 0 };
-    char buf[1024];
+    // Big enough by construction (the longest: a 200-byte template name escaped to 1,200
+    // characters); a line that would still not fit is dropped below rather than cut.
+    char buf[4096];
     auto name = [&](uint32_t id) { return lookup_ ? esc(lookup_(id)) : std::string(); };
     buf[0] = 0;
     switch (type) {
@@ -198,6 +200,7 @@ bool EventDecoder::line(int type, const uint8_t* payload, size_t n, double t, st
         default:  // 0x27 SpecialGameEvent and the rest: not written, as on the server
             return false;
     }
+    if (std::strlen(buf) >= sizeof(buf) - 1) return false;   // snprintf cut it: not valid JSON
     out = buf;
     return true;
 }

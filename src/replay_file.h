@@ -16,6 +16,7 @@ public:
     ~ReplayFile() { close(); }
 
     bool open(const std::string& path);   // false (and failed() true) when it can't be created
+    bool create(const std::string& path); // the same, but fails rather than truncate an existing file
     void line(std::string_view s);        // buffer s + '\n'; a no-op when not open or failed
     void tick(uint64_t nowMs);            // flush when nowMs - lastFlushMs >= 2000
     void close();                         // flush and close
@@ -23,6 +24,7 @@ public:
     bool failed() const { return failed_; }
 
 private:
+    bool openMode(const std::string& path, const char* mode);
     bool flush();
     std::FILE* file_ = nullptr;
     std::string buf_;

@@ -32,7 +32,12 @@ void ObjectTracker::sample(double t, const std::vector<LiveObject>& objects, std
     std::set<int> seen;
     for (const LiveObject& o : objects) {
         rf::Pose p = poseFromBody(o.netId, o.rows);
-        if (!rf::finitePose(p)) continue;
+        if (!rf::finitePose(p)) {
+            // Skipped for this sample only: a known object stays known (no d, no fresh o).
+            auto k = known_.find(o.netId);
+            if (k != known_.end() && k->second.gid == o.gid) seen.insert(o.netId);
+            continue;
+        }
         seen.insert(o.netId);
         auto it = known_.find(o.netId);
         if (it != known_.end() && it->second.gid != o.gid) {   // the id now names another object
@@ -56,8 +61,8 @@ void ObjectTracker::sample(double t, const std::vector<LiveObject>& objects, std
         dead.push_back(rf::dLine(t, it->first));
         it = known_.erase(it);
     }
-    // A reused id's d comes before its new o; objects gone from the sample come after the s line.
-    std::vector<std::string> reused;
+    // Every d (a reused id's, and objects gone from the sample) comes first, then the new o lines,
+    // then the s line.
     for (auto& l : dead) lines.push_back(l);
     for (auto& l : born) lines.push_back(l);
     if (!rows.empty()) lines.push_back(rf::sLine(t, rows));

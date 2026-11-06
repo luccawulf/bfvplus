@@ -1,13 +1,19 @@
 // One replay file (see replay_file.h).
 #include "replay_file.h"
 
-bool ReplayFile::open(const std::string& path)
+bool ReplayFile::open(const std::string& path) { return openMode(path, "wb"); }
+
+// "x": exclusive create (C11; MSVC's UCRT and glibc both take it), so a name chosen as free can't
+// truncate a file that appeared meanwhile.
+bool ReplayFile::create(const std::string& path) { return openMode(path, "wbx"); }
+
+bool ReplayFile::openMode(const std::string& path, const char* mode)
 {
     close();
     buf_.clear();
     lastFlushMs_ = 0;
     failed_ = false;
-    file_ = std::fopen(path.c_str(), "wb");
+    file_ = std::fopen(path.c_str(), mode);
     if (!file_) {
         failed_ = true;
         return false;

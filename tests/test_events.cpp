@@ -89,6 +89,19 @@ TEST(server_style_escape)
     CHECK_EQ(out, std::string("{\"k\":\"e\",\"t\":0.000,\"e\":\"serverName\",\"name\":\"Caf\\u00e9 \\\"1\\\"\\u000a\"}"));
 }
 
+TEST(long_template_name_line_complete)
+{
+    // A 200-byte name of high bytes escapes to 1,200 characters: the line must still be whole JSON.
+    EventDecoder dec([](uint32_t) { return std::string(200, '\xE9'); });
+    uint8_t p[32] = {};
+    p[0] = 5;            // template id 5
+    p[4] = 0x10;         // net id 16
+    std::string out;
+    CHECK(dec.line(0x07, p, sizeof(p), 0.0, out));
+    CHECK(out.size() > 1200);
+    CHECK_EQ(out.back(), '}');
+}
+
 TEST(server_info_is_0x1a)
 {
     CHECK(isServerInfo(0x1a));

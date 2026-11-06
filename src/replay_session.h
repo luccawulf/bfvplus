@@ -43,7 +43,7 @@ private:
     std::string path_;
     bool active_ = false;          // a file was attempted for the current connection
     bool localSeen_ = false;       // the local player has been present in this file
-    uint64_t openMs_ = 0, lastActivityMs_ = 0, nextSampleMs_ = 0;
+    uint64_t openMs_ = 0, lastActivityMs_ = 0, nextSampleMs_ = 0, lastDueMs_ = 0, lastWrittenMs_ = 0;
     std::string lastClose_;
     int closeCount_ = 0;
 };

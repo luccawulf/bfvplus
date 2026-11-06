@@ -132,6 +132,9 @@ sampleHz      = 30   ; soldier and vehicle samples per second, 1-30
   gameplay, input or network traffic.
 - **Your view of the round:** a client only hears about what the server sends it. Far-away
   players update less often, and fast aircraft are shown as your client extrapolated them.
+- If BFV is installed under `Program Files`, Windows may keep the files in
+  `%LOCALAPPDATA%\VirtualStore\Program Files\...\replays` instead (it redirects writes into
+  protected folders).
 - If a game structure doesn't match what bfvplus expects (another patch level), the recorder
   switches itself off and writes one line to `logs\bfvplus.log`. Everything else keeps working.
 

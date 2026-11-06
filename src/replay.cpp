@@ -180,7 +180,12 @@ void replay_shutdown()
 {
     // At process exit the game's threads are already gone; one may have died holding the lock, so
     // never wait for it (the file then just keeps what its last flush wrote).
-    if (!g_mu.try_lock()) return;
+    if (!g_mu.try_lock()) {
+        // Don't let the static destructors write it either: the buffer may be mid-append.
+        (void)g_session.release();
+        (void)g_events.release();
+        return;
+    }
     if (g_session) g_session->close();
     g_mu.unlock();
 }
