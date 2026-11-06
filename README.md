@@ -108,6 +108,35 @@ enum-to-string jump table at `0x0061818C`). The live sensitivity and invert valu
 are read from the game's own `InfantryControls` and `LandSeaControls` objects,
 which bfvplus captures as the game constructs them.
 
+## 4. Replay recorder (in development, 0.3-dev)
+
+The Battlefield Vietnam version of BF42++'s replay recorder: it records each game you join, from your
+own client, for the replay viewer. **Off by default.**
+
+```ini
+[replay]
+recordReplays = on   ; off by default
+sampleHz      = 30   ; soldier and vehicle samples per second, 1-30
+```
+
+- **One file per join:** `replays\replay_<date>-<time>.ndjson` next to `BfVietnam.exe`, in BF42++'s
+  replay format (version 5, marked `"game":"bfv"`). It is written to disk every 2 s, so a crash
+  loses at most 2 s, and it is closed with an `end` record when you leave or quit.
+- **What it holds:**
+  - every game event the server sends (players joining and leaving, teams, vehicles entered and
+    left, kills and scores, objects made and destroyed, the level and rules), in the same form as
+    the server replay recorder writes them
+  - the players (the roster marks you)
+  - every soldier and vehicle your client knows, at up to 30 samples a second
+- **Read-only:** it reads what your game already holds. It sends nothing and changes nothing about
+  gameplay, input or network traffic.
+- **Your view of the round:** a client only hears about what the server sends it. Far-away
+  players update less often, and fast aircraft are shown as your client extrapolated them.
+- If a game structure doesn't match what bfvplus expects (another patch level), the recorder
+  switches itself off and writes one line to `logs\bfvplus.log`. Everything else keeps working.
+
+Shots, armour, turrets, engines and soldier animations come in a later stage.
+
 ## Build
 
 You need **Visual Studio 2022** with the "Desktop development with C++"
@@ -191,13 +220,6 @@ The hook didn't install. Either:
 **My color choices aren't appearing in the cycle.**
 Check `bfvplus.ini` is next to `BfVietnam.exe`, not in some working
 directory. Restart the game after editing.
-
-## Planned: replay recorder
-
-A BFV version of BF42++'s replay recorder is planned for bfvplus. It will be off by default and
-turned on with `[replay] recordReplays = on` in `bfvplus.ini`. It will write each game you join to
-`replays\replay_<time>.ndjson`, in BF42++'s replay format, ready to upload to the replay viewer's
-site. It only reads what the game already shows you, and sends and changes nothing.
 
 ## Acknowledgements
 
