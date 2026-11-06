@@ -65,7 +65,11 @@ void ObjectTracker::sample(double t, const std::vector<LiveObject>& objects, std
 
 void PlayerTracker::sample(double t, const std::vector<LivePlayer>& players, std::vector<std::string>& lines)
 {
-    if (!rosterDone_ && !players.empty()) {
+    // The roster marks the recording player, so it waits until he is in the list: a join's database
+    // brings players a few at a time and him last (Sessions B and C).
+    bool haveLocal = false;
+    for (const LivePlayer& p : players) haveLocal = haveLocal || p.local;
+    if (!rosterDone_ && haveLocal) {
         std::vector<rf::RosterRow> roster;
         for (const LivePlayer& p : players) roster.push_back(rf::RosterRow{ p.pid, p.team, p.ai, p.name, p.local });
         lines.push_back(rf::rosterLine(t, roster));

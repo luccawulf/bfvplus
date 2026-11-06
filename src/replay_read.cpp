@@ -80,7 +80,22 @@ void walkTemplates()
     }
 }
 
+// The player manager, only when the global points at one (a stale or half-built pointer would make
+// the virtual call below jump anywhere).
+uintptr_t playerManager()
+{
+    uintptr_t pm = seh::u32(bfv::PLAYERMGR_GLOBAL);
+    return seh::ptrSane(pm) && seh::u32(pm) == VT_PlayerManager.va ? pm : 0;
+}
+
 }  // namespace
+
+void templateCacheReset()
+{
+    g_idToName.clear();
+    g_tmplToId.clear();
+    g_walkedOnce = false;
+}
 
 std::string templateNameById(uint32_t id)
 {
@@ -133,8 +148,8 @@ int readObjects(std::vector<LiveObject>& out, ReadStats* stats)
 int readPlayers(std::vector<LivePlayer>& out)
 {
     out.clear();
-    uintptr_t pm = seh::u32(bfv::PLAYERMGR_GLOBAL);
-    if (!seh::ptrSane(pm)) return 0;
+    uintptr_t pm = playerManager();
+    if (!pm) return 0;
     uintptr_t local = 0;
     seh::vcall0(pm, bfv::VSLOT_LOCAL_PLAYER, &local);
     uintptr_t head = seh::u32(pm + bfv::PM_LIST_HEAD);
@@ -173,7 +188,7 @@ int readPlayers(std::vector<LivePlayer>& out)
 
 bool localPlayerPresent()
 {
-    uintptr_t pm = seh::u32(bfv::PLAYERMGR_GLOBAL);
+    uintptr_t pm = playerManager();
     uintptr_t local = 0;
-    return seh::ptrSane(pm) && seh::vcall0(pm, bfv::VSLOT_LOCAL_PLAYER, &local) && local != 0;
+    return pm && seh::vcall0(pm, bfv::VSLOT_LOCAL_PLAYER, &local) && local != 0;
 }

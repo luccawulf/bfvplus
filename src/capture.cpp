@@ -647,23 +647,23 @@ static bool __stdcall hook_readEvent(void* buffer, int* outEvent)
     return ok;
 }
 
-void installCaptureHook()
+bool installCaptureHook()
 {
     // Serialize log writes (game thread + F9 dump thread). Do this first - logWrite
     // is only reachable after the hook/thread below, which we set up here.
     InitializeCriticalSection(&g_logCs);
 
     // Only patch the binary we reverse-engineered (BfVietnam.exe v1.21, base 0x400000).
-    if ((uintptr_t)GetModuleHandleA(nullptr) != 0x00400000) return;
+    if ((uintptr_t)GetModuleHandleA(nullptr) != 0x00400000) return false;
 
     uint8_t* site = (uint8_t*)ADDR_call_site;
-    if (site[0] != 0xE8) return;                                  // must be `call rel32`
+    if (site[0] != 0xE8) return false;                                  // must be `call rel32`
     int32_t rel = *(int32_t*)(site + 1);
     uintptr_t target = (uintptr_t)(site + 5) + (uintptr_t)rel;
-    if (target != ADDR_readEvent) return;                        // not the call we expect
+    if (target != ADDR_readEvent) return false;                        // not the call we expect
 
     DWORD oldProtect;
-    if (!VirtualProtect(site, 5, PAGE_EXECUTE_READWRITE, &oldProtect)) return;
+    if (!VirtualProtect(site, 5, PAGE_EXECUTE_READWRITE, &oldProtect)) return false;
     int32_t newRel = (int32_t)((uintptr_t)&hook_readEvent - (uintptr_t)(site + 5));
     *(int32_t*)(site + 1) = newRel;
     VirtualProtect(site, 5, oldProtect, &oldProtect);
@@ -675,4 +675,5 @@ void installCaptureHook()
         HANDLE h = CreateThread(nullptr, 0, dumpTimerThread, nullptr, 0, nullptr);
         if (h) CloseHandle(h);
     }
+    return true;
 }

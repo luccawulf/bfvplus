@@ -157,6 +157,25 @@ TEST(players_roster_then_p)
     CHECK_EQ(lines[0], std::string("{\"k\":\"p\",\"t\":0.700,\"p\":[[0,1,700,700,0,0]]}"));
 }
 
+TEST(roster_waits_for_local)
+{
+    // A join's database arrives a few players at a time and the recording player comes last: the
+    // roster (the only record that marks him) waits until he is in the list.
+    PlayerTracker tr;
+    std::vector<std::string> lines;
+    tr.sample(14.3, { pl(1, 1), pl(2, 2) }, lines);
+    CHECK_EQ(count(lines, "roster"), 0);
+    CHECK_EQ(count(lines, "p"), 1);
+    lines.clear();
+    tr.sample(15.9, { pl(1, 1), pl(2, 2), pl(0, 2, true) }, lines);
+    CHECK_EQ(count(lines, "roster"), 1);
+    CHECK(lines[0].find("\"me\",1]") != std::string::npos);
+    CHECK(lines[0].find("[1,1,1,\"bot\",0]") != std::string::npos);
+    lines.clear();
+    tr.sample(16.0, { pl(1, 1), pl(2, 2), pl(0, 2, true) }, lines);
+    CHECK(lines.empty());
+}
+
 TEST(players_reset_writes_roster_again)
 {
     PlayerTracker tr;

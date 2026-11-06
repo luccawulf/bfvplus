@@ -164,8 +164,10 @@ TEST(silent_end_after_30s)
     ReplaySession s(cfg(dir));
     s.onEvent(1000, tm0(), true);
     std::string first = s.path();
+    s.onFrame(1000, true);   // the local player seen once: the 30 s rule is armed
     for (uint64_t t = 1000; t <= 31000; t += 100) s.onFrame(t, false);
     CHECK(!s.recording());
+    CHECK_EQ(s.lastClose(), std::string("silent"));
     auto lines = linesOf(first);
     if (!lines.empty()) CHECK_EQ(lines.back(), std::string("{\"k\":\"end\",\"t\":0.000}"));
     std::tm later = tm0(); later.tm_sec = 40;
@@ -186,6 +188,38 @@ TEST(local_player_keeps_file_open)
     CHECK(!s.recording());
     auto lines = linesOf(s.path());
     if (!lines.empty()) CHECK_EQ(lines.back(), std::string("{\"k\":\"end\",\"t\":19.000}"));
+}
+
+TEST(silent_end_waits_for_local_player)
+{
+    // During a join the local player doesn't exist until the database ends, and a slow map load can
+    // pass 30 s with only polls: the rule arms only once the local player has been seen in the file.
+    std::string dir = tempDir() + "/replays";
+    ReplaySession s(cfg(dir));
+    s.onEvent(0, tm0(), true);
+    for (uint64_t t = 0; t <= 40000; t += 100) s.onFrame(t, false);
+    CHECK(s.recording());
+    s.onFrame(41000, true);
+    for (uint64_t t = 41100; t <= 71000; t += 100) s.onFrame(t, false);
+    CHECK(!s.recording());
+    auto lines = linesOf(s.path());
+    if (!lines.empty()) CHECK_EQ(lines.back(), std::string("{\"k\":\"end\",\"t\":41.000}"));
+}
+
+TEST(close_reasons)
+{
+    std::string dir = tempDir() + "/replays";
+    ReplaySession s(cfg(dir));
+    CHECK_EQ(s.closeCount(), 0);
+    s.onEvent(0, tm0(), true);
+    s.onEvent(500, tm0(), true);   // a second join
+    CHECK_EQ(s.closeCount(), 1);
+    CHECK_EQ(s.lastClose(), std::string("new join"));
+    s.close();
+    CHECK_EQ(s.closeCount(), 2);
+    CHECK_EQ(s.lastClose(), std::string("exit"));
+    s.close();                     // nothing open: no second count
+    CHECK_EQ(s.closeCount(), 2);
 }
 
 TEST(failed_open_not_retried_every_event)

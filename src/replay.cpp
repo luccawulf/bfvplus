@@ -37,7 +37,9 @@ std::unique_ptr<EventDecoder> g_events;
 ObjectTracker g_objects;
 PlayerTracker g_players;
 std::string g_path;
-bool g_loggedOpenFail = false, g_loggedRead = false, g_loggedListFail = false;
+bool g_loggedOpenFail = false, g_loggedRead = false, g_loggedListFail = false, g_loggedNoObjects = false;
+int g_closesLogged = 0;
+unsigned g_samplesWithoutObjects = 0;
 
 uint64_t nowMs()
 {
@@ -81,8 +83,19 @@ void noticeNewFile()
     g_objects.reset();
     g_players.reset();
     g_events.reset(new EventDecoder(templateNameById));
-    g_loggedRead = g_loggedListFail = false;
+    templateCacheReset();
+    g_loggedRead = g_loggedListFail = g_loggedNoObjects = false;
+    g_samplesWithoutObjects = 0;
     plusLog("replay: recording to %s", g_path.c_str());
+}
+
+// Each file that closed since the last look, with why (no disconnect signal exists, so the status
+// log is how a lab session checks the close rules).
+void logCloses()
+{
+    if (g_session->closeCount() == g_closesLogged) return;
+    g_closesLogged = g_session->closeCount();
+    plusLog("replay: closed %s (%s), end t=%.3f", g_path.c_str(), g_session->lastClose().c_str(), g_session->lastActivityT());
 }
 
 }  // namespace
@@ -101,6 +114,8 @@ void replay_onEvent(void* ev)
     std::tm local{};
     localtime_s(&local, &tt);
     g_session->onEvent(now, local, isServerInfo((int)type));
+    logCloses();
+    if (type == 0x36) templateCacheReset();   // SetLevelEvent: a new level's templates
     if (!g_session->recording()) {
         if (!g_loggedOpenFail) { g_loggedOpenFail = true; plusLog("replay: cannot write %s", g_session->path().c_str()); }
         return;
@@ -132,6 +147,7 @@ void replay_onInputPoll()
 static void sampleIfDue(uint64_t now)
 {
     const bool due = g_session->onFrame(now, localPlayerPresent());
+    logCloses();
     if (!due || !g_session->recording()) return;
     const double t = g_session->t(now);
     std::vector<std::string> lines;
@@ -149,6 +165,14 @@ static void sampleIfDue(uint64_t now)
         g_loggedRead = true;
         plusLog("replay: object list %u, walked %u, soldiers %u, vehicles %u; players %u",
             st.listSize, st.walked, st.soldiers, st.vehicles, (unsigned)players.size());
+    }
+    // In game but no soldier or vehicle found for ~3 s at 30 Hz: the object reads don't fit this exe.
+    bool inGame = false;
+    for (const auto& p : players) inGame = inGame || p.local;
+    if (inGame && n >= 0 && st.soldiers + st.vehicles == 0 && ++g_samplesWithoutObjects == 90 && !g_loggedNoObjects) {
+        g_loggedNoObjects = true;
+        plusLog("replay: players but no soldiers or vehicles found (object list %u, walked %u); the object reads may not match this exe",
+            st.listSize, st.walked);
     }
 }
 

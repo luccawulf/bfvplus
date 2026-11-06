@@ -21,3 +21,6 @@ bool localPlayerPresent();
 // Template id -> name from the client's ObjectTemplateManager tree ("" when unknown). The tree is
 // walked again when a lookup misses, at most every 5 s.
 std::string templateNameById(uint32_t id);
+
+// Forget the template id/name maps (a new file, or a level change: ids and addresses can be reused).
+void templateCacheReset();

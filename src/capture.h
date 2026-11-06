@@ -16,4 +16,4 @@ extern int  g_dumpObjectsInterval;
 // Patch the single call site of the per-received-event reader (FUN_005b3a70) to
 // route through our logger. Sanity-checks the binary first; a no-op if it doesn't
 // match BfVietnam.exe v1.21.
-void installCaptureHook();
+bool installCaptureHook();   // false when the exe doesn't match (nothing patched)

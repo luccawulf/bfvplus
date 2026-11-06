@@ -14,6 +14,7 @@
 #include "sensitivity.h"
 #include "replay.h"
 #include "replay_settings.h"
+#include "plus_log.h"
 
 // Real dinput8.dll function we forward to.
 // LPUNKNOWN is declared as void* here to avoid pulling in <Unknwn.h> - we
@@ -89,7 +90,9 @@ static DWORD WINAPI initThread(LPVOID)
     // own binary sanity check and is a no-op if disabled or the bytes don't match.
     // The replay recorder and its probe hang off the same hook, so it goes in when any of the
     // three wants it.
-    if (g_captureEnabled || g_replay.record || g_replay.probe) installCaptureHook();
+    if ((g_captureEnabled || g_replay.record || g_replay.probe) && !installCaptureHook()
+        && (g_replay.record || g_replay.probe))
+        plusLog("replay: this BfVietnam.exe doesn't match the event hook (0x005B3C14); not recording");
 
 
     // Stationary-MG sensitivity needs the InfantryControls / LandSeaControls objects,
