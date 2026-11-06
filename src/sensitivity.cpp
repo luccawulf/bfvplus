@@ -50,6 +50,9 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include "sensitivity.h"
+#include "replay.h"
+#include "replay_probe.h"
+#include "replay_settings.h"
 
 #include <cmath>
 #include <cstdint>
@@ -388,9 +391,19 @@ static void* patchSlot(void* obj, unsigned index, void* replacement)
     return prev;
 }
 
+// The game polls the mouse once or more per frame, so these hooks double as the replay
+// recorder's frame tick (and the probe counts which thread makes the calls). Called for the
+// mouse device whether or not the poll succeeded: a frame happened either way.
+static void pollCallbacks(int kind)
+{
+    if (g_replay.probe) probe_onInputPoll(kind);
+    replay_onInputPoll();
+}
+
 static HRESULT WINAPI hook_GetDeviceState(void* self, DWORD cbData, void* lpvData)
 {
     HRESULT hr = s_realGetDeviceState(self, cbData, lpvData);
+    if (self == s_mouseDevice) pollCallbacks(0);
     if (FAILED(hr) || self != s_mouseDevice || !lpvData) return hr;
 
     // Immediate mode: the data format is DIMOUSESTATE or DIMOUSESTATE2, both of
@@ -412,6 +425,7 @@ static HRESULT WINAPI hook_GetDeviceData(void* self, DWORD cbOde, void* rgdod,
                                          DWORD* pdwInOut, DWORD dwFlags)
 {
     HRESULT hr = s_realGetDeviceData(self, cbOde, rgdod, pdwInOut, dwFlags);
+    if (self == s_mouseDevice) pollCallbacks(1);
     if (FAILED(hr) || self != s_mouseDevice || !rgdod || !pdwInOut) return hr;
 
     float kx, ky; bool flipY;

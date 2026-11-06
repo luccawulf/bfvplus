@@ -20,7 +20,10 @@ SITE(SITE_infCtorCall, 0x004E0939, "E8 A2 37 0C 00", "sensitivity: settings root
 SITE(SITE_landSeaCtorCall, 0x004E0956, "E8 05 28 0C 00", "sensitivity: settings root -> LandSeaControls::ctor 0x005A3160")
 
 // ---- vtables (identify live objects; not patched) --------------------------------------------
-VTABLE(VT_PlayerControlObject, 0x00B93C44, "capture: live x32dbg 2026-06-03 (PCO template at +0x08)")
+VTABLE(VT_PlayerControlObject, 0x00B93D24, "RTTI (tools/rtti_vtables.py): PlayerControlObject, subobject +0x0")
+VTABLE(VT_PlayerControlObject_160, 0x00B93C44, "RTTI: the PCO subobject at +0x160 (capture.cpp scans for this one: its +0x08 template, +0x120 body)")
+VTABLE(VT_BFSoldier_160, 0x00B902F0, "RTTI: BFSoldier's subobject at +0x160 (soldiers don't carry 0x00B93C44)")
+VTABLE(VT_BFPlayer, 0x00B5F70C, "RTTI: BFPlayer@bf@dice, subobject +0x0")
 VTABLE(VT_ObjectManager, 0x00B90A8C, "port notes: findallmem live 2026-06-03; global *(0x00D7D014)")
 VTABLE(VT_ObjectTemplateManager, 0x00B95334, "capture: global *(0x00D7D018), live 2026-06-03")
 VTABLE(VT_BFSoldier, 0x00B9033C, "sensitivity: RTTI locator 0x00C3EF08, slot 39 = handlePlayerInput 0x0065F350")

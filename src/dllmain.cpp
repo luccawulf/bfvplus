@@ -12,6 +12,8 @@
 #include "config.h"
 #include "capture.h"
 #include "sensitivity.h"
+#include "replay.h"
+#include "replay_settings.h"
 
 // Real dinput8.dll function we forward to.
 // LPUNKNOWN is declared as void* here to avoid pulling in <Unknwn.h> - we
@@ -85,7 +87,9 @@ static DWORD WINAPI initThread(LPVOID)
 
     // SSM capture: hook the received-GameEvent reader. installCaptureHook does its
     // own binary sanity check and is a no-op if disabled or the bytes don't match.
-    if (g_captureEnabled) installCaptureHook();
+    // The replay recorder and its probe hang off the same hook, so it goes in when any of the
+    // three wants it.
+    if (g_captureEnabled || g_replay.record || g_replay.probe) installCaptureHook();
 
 
     // Stationary-MG sensitivity needs the InfantryControls / LandSeaControls objects,
@@ -123,6 +127,9 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID)
         // hit our patched call site until after the hook is in.
         HANDLE h = CreateThread(nullptr, 0, initThread, nullptr, 0, nullptr);
         if (h) CloseHandle(h);
+    } else if (reason == DLL_PROCESS_DETACH) {
+        // Game exit: close an open replay file with its end line (no-op when not recording).
+        replay_shutdown();
     }
     return TRUE;
 }

@@ -17,6 +17,9 @@
 #include <cstdio>
 #include <cstdint>
 #include "capture.h"
+#include "replay.h"
+#include "replay_probe.h"
+#include "replay_settings.h"
 
 bool g_captureEnabled = true;
 bool g_dumpObjects = true;          // [capture] dumpObjects (default on)
@@ -628,12 +631,17 @@ static bool __stdcall hook_readEvent(void* buffer, int* outEvent)
         void* ev = (void*)(intptr_t)*outEvent;
         if (g_captureEnabled) logServerEvent(ev);
 
+        // The replay recorder (and its address-finding probe) see every event too. The hook
+        // is installed when either the capture log or the recorder wants it (dllmain.cpp).
+        if (g_replay.probe) probe_onEvent(ev);
+        replay_onEvent(ev);
+
         // Auto-dump objects when a join completes (DataBaseCompleteEvent 0x34).
         __try {
             int id = ((getType_t)(*(void***)ev)[0])(ev);
             // On join (DataBaseComplete): dump the templateID->name library once, plus a
             // first live-object snapshot. Vehicles that spawn later are caught by the timer.
-            if (id == 0x34 && g_dumpObjects) { dumpObjects(); dumpLiveObjects(); }
+            if (id == 0x34 && g_captureEnabled && g_dumpObjects) { dumpObjects(); dumpLiveObjects(); }
         } __except (EXCEPTION_EXECUTE_HANDLER) {}
     }
     return ok;
@@ -661,8 +669,9 @@ void installCaptureHook()
     VirtualProtect(site, 5, oldProtect, &oldProtect);
     FlushInstructionCache(GetCurrentProcess(), site, 5);
 
-    // Periodic object snapshots when enabled (bfvplus.ini [capture] dumpObjects).
-    if (g_dumpObjects && g_dumpObjectsInterval > 0) {
+    // Periodic object snapshots when enabled (bfvplus.ini [capture] dumpObjects). They belong
+    // to the capture log, so they stay off when only the replay recorder installed the hook.
+    if (g_captureEnabled && g_dumpObjects && g_dumpObjectsInterval > 0) {
         HANDLE h = CreateThread(nullptr, 0, dumpTimerThread, nullptr, 0, nullptr);
         if (h) CloseHandle(h);
     }
