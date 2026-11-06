@@ -18,6 +18,16 @@ SITE(SITE_addBuddyCall, 0x0057A1E4, "E8 47 10 FD FF", "buddycolors: scoreboard A
 SITE(SITE_readEventCall, 0x005B3C14, "E8 57 FE FF FF", "capture: packet deserializer 0x005B3B50 -> readEvent 0x005B3A70 (static RE, live 2026-06-03)")
 SITE(SITE_infCtorCall, 0x004E0939, "E8 A2 37 0C 00", "sensitivity: settings root -> InfantryControls::ctor 0x005A40E0")
 SITE(SITE_landSeaCtorCall, 0x004E0956, "E8 05 28 0C 00", "sensitivity: settings root -> LandSeaControls::ctor 0x005A3160")
+// The probe's fire hook (plan-1b Task 5; the recorder's in Task 9): FireArms::Fire 0x0067F170 calls
+// FireArms::fireBarrel(IPlayer*, Mat4&, int) 0x0067D7E0 from these six call sites and nowhere else
+// (static RE 2026-11-06: the server's fireBarrel 0x087E0D30 has five call sites, all in its Fire).
+SITE(SITE_fireBarrelCall1, 0x0067F7EC, "E8 EF DF FF FF", "Fire 0x0067F170 -> fireBarrel 0x0067D7E0, push -1 (static RE)")
+SITE(SITE_fireBarrelCall2, 0x0067F80C, "E8 CF DF FF FF", "Fire -> fireBarrel, push 0 (static RE)")
+SITE(SITE_fireBarrelCall3, 0x0067F869, "E8 72 DF FF FF", "Fire -> fireBarrel, the barrel loop, push edi (static RE)")
+SITE(SITE_fireBarrelCall4, 0x0067F8B3, "E8 28 DF FF FF", "Fire -> fireBarrel, push the byte at FireArms+0x332 (static RE)")
+SITE(SITE_fireBarrelCall5, 0x0067F90F, "E8 CC DE FF FF", "Fire -> fireBarrel, push esi (static RE)")
+SITE(SITE_fireBarrelCall6, 0x0067F93B, "E8 A0 DE FF FF", "Fire -> fireBarrel, push edi (static RE)")
+SITE(SITE_fireBarrelEntry, 0x0067D7E0, "81 EC C0 00 00 00 53 55", "fireBarrel's entry: sub esp,0xC0; push ebx; push ebp (thiscall, ret 0xC)")
 
 // ---- vtables (identify live objects; not patched) --------------------------------------------
 VTABLE(VT_PlayerControlObject, 0x00B93D24, "RTTI (tools/rtti_vtables.py): PlayerControlObject, subobject +0x0")
@@ -28,6 +38,16 @@ VTABLE(VT_PlayerManager, 0x00BA413C, "RTTI: PlayerManager@world@ref2@dice; *(0x0
 VTABLE(VT_ObjectManager, 0x00B90A8C, "port notes: findallmem live 2026-06-03; global *(0x00D7D014)")
 VTABLE(VT_ObjectTemplateManager, 0x00B95334, "capture: global *(0x00D7D018), live 2026-06-03")
 VTABLE(VT_BFSoldier, 0x00B9033C, "sensitivity: RTTI locator 0x00C3EF08, slot 39 = handlePlayerInput 0x0065F350")
+// plan-1b static RE (2026-11-06): tools/rtti_vtables.py, the primary (+0x0) vtable of each class.
+VTABLE(VT_Armor, 0x00B73844, "RTTI Armor@world@ref2@dice; a component in an object's map, id 0xC4A4")
+VTABLE(VT_Engine, 0x00BA486C, "RTTI Engine@world@ref2@dice (+0x84: 0x00BA4854)")
+VTABLE(VT_PhysicsEngine, 0x00BA498C, "RTTI PhysicsEngine@world@ref2@dice; an Engine's +0x64")
+VTABLE(VT_ScoreManager, 0x00B739EC, "RTTI ScoreManager@world@ref2@dice (+0x4: 0x00B739B8); *(0x00D65748)")
+VTABLE(VT_ControlPoint, 0x00B90C94, "RTTI ControlPoint@world@ref2@dice (+0x84 0x00B90C7C, +0x160 0x00B90C50)")
+VTABLE(VT_FireArms, 0x00B9164C, "RTTI FireArms@world@ref2@dice (+0x84 0x00B91630, +0x160 0x00B91604)")
+VTABLE(VT_HandFireArms, 0x00B9D97C, "RTTI HandFireArms@world@ref2@dice (+0x84, +0x160, +0x368 subobjects)")
+VTABLE(VT_RotationalBundle, 0x00BA45FC, "RTTI RotationalBundle@world@ref2@dice (+0x84: 0x00BA45E0)")
+VTABLE(VT_MusicPlayer, 0x00B90654, "RTTI MusicPlayer@world@ref2@dice (+0x84: 0x00B90638)")
 
 // ---- the replay recorder's reads (Session A on the lab, 2026-11-06; evidence in the viewer repo's
 //      features/bfv-client-recorder/session-a.md) ------------------------------------------------
@@ -64,4 +84,49 @@ inline constexpr uintptr_t PLAYER_TEAM = 0xC0;   // u32 (41 of 41)
 inline constexpr uintptr_t PLAYER_AI = 0xBC;     // u8, just before team as on the server: 0 for the owner, 1 for bots (Session A's 65 owner and 2,861 bot dumps; Session B showed +0xC4 is 1 for everyone)
 // Events: the payload starts at ev+12 and carries the server recorder's BFV layout (core.c's offsets).
 inline constexpr uintptr_t EVENT_PAYLOAD = 0x0C;
+
+// ---- stages 2-3 (plan-1b), from static RE on 2026-11-06 unless marked "estimate". "L" is the Linux
+//      server bfv_linded (symbols); a client vtable slot n is L's slot n+1 (one MSVC destructor slot
+//      where GCC has two), checked on each getter's body. Session D confirms or corrects each. --------
+inline constexpr uintptr_t OBJ_REL_PTR = 0x8C;   // -> the relative transform (Session A); a child's own turn
+// An object's components: Object::queryComponent (client slot 9, 0x00684A30) takes five ids from fields
+// (+0x5C..+0x6C, the networkable at +0x6C), else finds the id in the std::map at obj+0xD8 and compares
+// the node with the head at obj+0xDC; the component is node+0x10. MSVC 7.1 _Tree node: left +0, parent
+// +4, right +8, key +0x0C, value +0x10, then the colour and isnil bytes.
+inline constexpr uintptr_t COMP_MAP_HEAD = 0xDC;
+inline constexpr uintptr_t COMP_NODE_KEY = 0x0C, COMP_NODE_VALUE = 0x10;
+inline constexpr uint32_t ARMOR_IID = 0xC4A4;    // 0x006945D0 calls queryComponent(0xC4A4, 0xC4A4); the server's armor_iid
+// Armor (vtable 0x00B73844): client slots 8, 6, 12, 31 = L getHitPoints, getMaxHitPoints,
+// getCriticalDamage, getLastHitPlayer; 51, 52 = isDestroyed, isCriticalDamaged; 36 = getObject.
+inline constexpr uintptr_t ARMOR_HP = 0x38, ARMOR_MAXHP = 0x3C, ARMOR_CRIT = 0xF0, ARMOR_LASTHIT = 0x14;
+inline constexpr uintptr_t ARMOR_DESTROYED = 0x110, ARMOR_CRITICAL = 0x111, ARMOR_OBJECT = 0x34;
+// Engine (vtable 0x00BA486C): handleMessage 0x006F95F0 (message 4 sets the running byte unless the
+// disabled byte is set, 5 clears it; the physics node at +0x64); handlePlayerInput 0x006F9810 writes
+// the input vector at +0x178, its third axis +0x180 being the server's throttle (L +0x160);
+// handleUpdate 0x006F9950 zeroes the PhysicsEngine's revs +0xB0 when not running and steps its gear +0xD0.
+inline constexpr uintptr_t ENG_PHYS = 0x64, ENG_RUNNING = 0x1A0, ENG_DISABLED = 0x1A1, ENG_THROTTLE = 0x180;
+inline constexpr uintptr_t PE_REVS = 0xB0, PE_GEAR = 0xD0;
+// ScoreManager: 0x00573F28 loads *(0x00D65748), calls slot 5 (getTeamScore 0x0059A080: this + 0x28 +
+// team * 0x44) and reads +0x38 (the tickets, TeamScore::setTickets on L); 0x004C112F stores the new manager.
+inline constexpr uintptr_t SCOREMGR_GLOBAL = 0x00D65748;
+inline constexpr uintptr_t SCORE_TEAM_BASE = 0x28, SCORE_TEAM_STRIDE = 0x44, SCORE_TICKETS = 0x38;
+// ControlPoint (vtable 0x00B90C94): handleUpdate 0x00674B40 against L 0x087D70A0 puts every field 0x24
+// later (template +0x1C4, timer +0x1EC, count +0x1E8, attack +0x1F0/+0x1F4), so L's team +0x1B0
+// (ControlPoint::setTeam 0x087D7B70) is +0x1D4; the update compares its winner with it.
+inline constexpr uintptr_t CP_TEAM = 0x1D4, CP_TEMPLATE = 0x1C4;
+// Shots: FireArms::Fire 0x0067F170 (thiscall, 1 argument), found by its call order inside
+// FireArms::handleUpdate 0x006809D0; fireBarrel(IPlayer*, Mat4&, int) 0x0067D7E0, ret 0xC; its Mat4 is
+// 16 floats like an object's rows (a, b, c, position; a round leaves along row c).
+inline constexpr uintptr_t FIRE_FN = 0x0067F170, FIRE_BARREL_FN = 0x0067D7E0;
+// Animation: getCurrentStateFlags 0x0072C3F0 reads an instance's state +0x18, then *(0x00DE450C)'s
+// vector of AnimationState* (begin +0x18, end +0x1C) and the state's flags +0x2C.
+inline constexpr uintptr_t ANIM_ASM_GLOBAL = 0x00DE450C;
+inline constexpr uintptr_t ASM_STATES = 0x18, STATE_FLAGS = 0x2C, INSTANCE_STATE = 0x18;
+// Soldier (BFSoldier): instances at +0x2F0, +0x330, +0x370, +0x3B0 (stride 0x40; 51 and 29 `lea` of the
+// first two before instance calls). The server's lower/upper are +0x2C4/+0x304, so +0x2F0 is taken as the
+// lower body and +0x330 the upper (tentative). Item, bits and aim are estimates: the server's offsets plus
+// the machines' delta 0x2C (L +0x3D8, +0x406, +0x2B0, +0x2B4).
+inline constexpr uintptr_t SOL_LOWER = 0x2F0 + 0x18, SOL_UPPER = 0x330 + 0x18;
+inline constexpr uintptr_t SOL_ITEM = 0x404, SOL_BITS = 0x432;       // estimate
+inline constexpr uintptr_t SOL_PITCH = 0x2DC, SOL_TWIST = 0x2E0;     // estimate
 }  // namespace bfv
