@@ -1,8 +1,15 @@
-// The address-finding probe ([replay] probe = on; a developer switch, off by default). It writes
-// raw bytes to logs\bfvplus_probe.log for an offline match against the lab server recorder's
-// file of the same minutes: which thread calls what, each event type's bytes, the live
-// soldiers, vehicles and players, and the object manager's tree. Read-only; SEH-guarded.
+// The address-finding probe ([replay] probe = on; a developer switch, off by default). It writes raw
+// bytes to logs\bfvplus_probe.log for an offline match against the lab server recorder's file of the
+// same minutes. v1 (Session A) found stage 1's offsets; v2 (plan-1b, Session D) gathers stages 2-3:
+// armour components, soldiers' states, control points, tickets, weapons and every round they fire,
+// engines, moving parts, radios, the animation table and the recording player's own fields.
+// Read-only (the fire hook only observes); SEH-guarded; nothing runs while the probe is off.
 #pragma once
 
 void probe_onEvent(void* ev);       // from the readEvent hook
 void probe_onInputPoll(int kind);   // from the mouse hooks: 0 GetDeviceState, 1 GetDeviceData
+
+// The probe's fire hook: each of FireArms::Fire's six calls to fireBarrel (0x0067D7E0) goes through a
+// thunk that logs the round, then calls fireBarrel. Patches nothing unless all six call sites and the
+// entry match (bfv_addresses.h SITE_fireBarrel*). Call once, only when the probe is on.
+bool probe_installFireHook();
