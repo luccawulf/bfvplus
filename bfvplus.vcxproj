@@ -84,6 +84,7 @@
     <ClCompile Include="src\plus_log.cpp" />
     <ClCompile Include="src\replay.cpp" />
     <ClCompile Include="src\replay_probe.cpp" />
+    <ClCompile Include="src\replay_events.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\buddycolors.h" />
