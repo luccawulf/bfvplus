@@ -20,7 +20,7 @@ TEST(hz_clamped)
     ReplaySettings s;
     applyReplaySetting(s, "sampleHz", "0");   CHECK_EQ(s.sampleHz, 1);
     applyReplaySetting(s, "sampleHz", "99");  CHECK_EQ(s.sampleHz, 30);
-    applyReplaySetting(s, "sampleHz", "abc"); CHECK_EQ(s.sampleHz, 10);
+    applyReplaySetting(s, "sampleHz", "abc"); CHECK_EQ(s.sampleHz, 30);
     applyReplaySetting(s, "samplehz", "15");  CHECK_EQ(s.sampleHz, 15);
 }
 
@@ -36,6 +36,6 @@ TEST(unknown_key)
     ReplaySettings s;
     CHECK(!applyReplaySetting(s, "colour", "on"));
     CHECK(!s.record);
-    CHECK_EQ(s.sampleHz, 10);
+    CHECK_EQ(s.sampleHz, 30);
     CHECK(!s.probe);
 }

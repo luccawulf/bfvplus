@@ -148,8 +148,9 @@ static void writeDefaultIni(const std::string& path)
     f << "; Record each game you join to replays\\replay_<time>.ndjson (BF42++'s format)\n";
     f << "; for the replay viewer. off = disabled (default), on = enabled.\n";
     f << "recordReplays = off\n";
-    f << "; Object samples per second, 1-30 (BF42++ uses 10).\n";
-    f << "sampleHz = 10\n";
+    f << "; Object samples per second, 1-30. 30 matches the server replay recorder;\n";
+    f << "; the game polls its input faster than that, so 30 is reached in practice.\n";
+    f << "sampleHz = 30\n";
     f.close();
 }
 

@@ -60,7 +60,7 @@ inline constexpr unsigned VSLOT_PLAYER_VEHICLE = 14;
 inline constexpr uintptr_t PLAYER_NAME = 0x50;   // MSVC string (41 of 41 joined by name)
 inline constexpr uintptr_t PLAYER_ID = 0x7C;     // u32 (41 of 41)
 inline constexpr uintptr_t PLAYER_TEAM = 0xC0;   // u32 (41 of 41)
-inline constexpr uintptr_t PLAYER_AI = 0xC4;     // u32; Session A had one human, so five offsets fit: this one sits beside team, as on the server
+inline constexpr uintptr_t PLAYER_AI = 0xBC;     // u8, just before team as on the server: 0 for the owner, 1 for bots (Session A's 65 owner and 2,861 bot dumps; Session B showed +0xC4 is 1 for everyone)
 // Events: the payload starts at ev+12 and carries the server recorder's BFV layout (core.c's offsets).
 inline constexpr uintptr_t EVENT_PAYLOAD = 0x0C;
 }  // namespace bfv

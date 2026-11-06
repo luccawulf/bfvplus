@@ -150,7 +150,9 @@ int readPlayers(std::vector<LivePlayer>& out)
         LivePlayer p{};
         p.pid = (int)seh::u32(pl + bfv::PLAYER_ID);
         p.team = (int)seh::u32(pl + bfv::PLAYER_TEAM);
-        p.ai = seh::u32(pl + bfv::PLAYER_AI) != 0;
+        uint8_t ai = 0;
+        seh::read(pl + bfv::PLAYER_AI, &ai, 1);
+        p.ai = ai != 0;
         p.name = seh::msvcString(pl + bfv::PLAYER_NAME);
         p.local = pl == local;
         uintptr_t ctrl = 0;

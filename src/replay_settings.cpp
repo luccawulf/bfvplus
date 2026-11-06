@@ -21,7 +21,7 @@ bool applyReplaySetting(ReplaySettings& s, std::string key, std::string value)
     } else if (key == "samplehz") {
         char* end = nullptr;
         long hz = std::strtol(value.c_str(), &end, 10);
-        if (end == value.c_str() || *end != '\0') hz = 10;   // not a number: the default
+        if (end == value.c_str() || *end != '\0') hz = 30;   // not a number: the default
         s.sampleHz = hz < 1 ? 1 : hz > 30 ? 30 : (int)hz;
     } else if (key == "probe") {
         s.probe = truthy;

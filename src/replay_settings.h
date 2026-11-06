@@ -2,14 +2,14 @@
 //
 //   [replay]
 //   recordReplays = off   ; on: write replays\replay_<time>.ndjson while connected
-//   sampleHz      = 10    ; object samples per second, 1-30
+//   sampleHz      = 30    ; object samples per second, 1-30 (30: the server recorder's rate)
 //   probe         = off   ; developer switch: write logs\bfvplus_probe.log (address finding)
 #pragma once
 #include <string>
 
 struct ReplaySettings {
     bool record = false;
-    int sampleHz = 10;
+    int sampleHz = 30;
     bool probe = false;
 };
 
