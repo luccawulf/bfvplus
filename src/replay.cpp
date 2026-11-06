@@ -2,8 +2,10 @@
 // sample is due; this file feeds it from the game.
 // - replay_onEvent (the readEvent hook): the event's type, the session's join/connection rules, then
 //   the event's record from its payload (ev+12).
-// - replay_onInputPoll (the mouse hook, ~28 a second on the game thread): the 30 s silent end, the
-//   2 s flush, and on each due sample the players, then the soldiers and vehicles.
+// - replay_onInputPoll (the mouse hook, many times a second on the game thread): the 30 s silent end,
+//   the 2 s flush, and on each due sample the players, then the soldiers and vehicles.
+// - The event hook takes a due sample too, for the spawn screen, where the game stops polling the
+//   mouse but the server's events keep coming.
 // - replay_shutdown (DllMain at process exit): the end line and a last flush.
 // All three return at once while [replay] recordReplays is off.
 #define WIN32_LEAN_AND_MEAN
@@ -85,6 +87,8 @@ void noticeNewFile()
 
 }  // namespace
 
+static void sampleIfDue(uint64_t now);
+
 void replay_onEvent(void* ev)
 {
     if (!g_replay.record) return;
@@ -111,6 +115,9 @@ void replay_onEvent(void* ev)
     }
     std::string line;
     if (g_events->line((int)type, payload, n, g_session->t(now), line)) g_session->write(line);
+    // The game stops polling the mouse on the spawn screen (Session C: 23 s with no samples while
+    // bots moved), but the server's events keep coming on the same thread: take a due sample here too.
+    sampleIfDue(now);
 }
 
 void replay_onInputPoll()
@@ -118,7 +125,12 @@ void replay_onInputPoll()
     if (!g_replay.record) return;
     std::lock_guard<std::mutex> lock(g_mu);
     if (!g_session) return;   // nothing before the first event of a connection
-    const uint64_t now = nowMs();
+    sampleIfDue(nowMs());
+}
+
+// Called with g_mu held, from either hook (both run on the game thread).
+static void sampleIfDue(uint64_t now)
+{
     const bool due = g_session->onFrame(now, localPlayerPresent());
     if (!due || !g_session->recording()) return;
     const double t = g_session->t(now);
