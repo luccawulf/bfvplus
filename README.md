@@ -192,6 +192,13 @@ The hook didn't install. Either:
 Check `bfvplus.ini` is next to `BfVietnam.exe`, not in some working
 directory. Restart the game after editing.
 
+## Planned: replay recorder
+
+A BFV version of BF42++'s replay recorder is planned for bfvplus. It will be off by default and
+turned on with `[replay] recordReplays = on` in `bfvplus.ini`. It will write each game you join to
+`replays\replay_<time>.ndjson`, in BF42++'s replay format, ready to upload to the replay viewer's
+site. It only reads what the game already shows you, and sends and changes nothing.
+
 ## Acknowledgements
 
 - uuuzbf/bf42plus for the original BF1942 implementation and the pattern
