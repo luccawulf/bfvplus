@@ -72,6 +72,17 @@ bool decodeSoldier(const uint8_t* b, size_t n, SoldierFields& out)
     return true;
 }
 
+bool decodeMusic(const uint8_t* b, size_t n, MusicFields& out)
+{
+    if (!b || n < bfv::MUS_LEFT + 4) return false;
+    out.playing = b[bfv::MUS_PLAYING] != 0;
+    out.song = at<int32_t>(b, bfv::MUS_SONG);
+    out.group = at<int32_t>(b, bfv::MUS_GROUP);
+    out.left = at<float>(b, bfv::MUS_LEFT);
+    if (!std::isfinite(out.left)) out.left = 0.0f;
+    return true;
+}
+
 void partRelative(const float rootRows[16], const float partRows[16], float q[4], float pos[3])
 {
     const rf::Pose r = poseFromBody(0, rootRows), p = poseFromBody(0, partRows);

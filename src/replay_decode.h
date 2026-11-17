@@ -21,6 +21,11 @@ bool decodeCpTeam(const uint8_t* cp, size_t n, int& team);
 struct SoldierFields { int lower, upper; float pitch, twist; int item, bits; };
 bool decodeSoldier(const uint8_t* soldier, size_t n, SoldierFields& out);
 
+// A vehicle radio's MusicPlayer (vtable 0x00B90654): playing, the song and its group, and the seconds the
+// song has left (counted down while it plays; a stopped client radio holds the song's full length).
+struct MusicFields { bool playing; int song, group; float left; };
+bool decodeMusic(const uint8_t* musicPlayer, size_t n, MusicFields& out);
+
 // A part's turn relative to its root (conj(q_root) * q_part, poseFromBody's quaternions) and where it
 // sits in the root's frame (its offset projected on the root's rows a, b, c): BF42++'s and the server's.
 void partRelative(const float rootRows[16], const float partRows[16], float q[4], float at[3]);

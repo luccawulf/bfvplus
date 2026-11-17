@@ -123,10 +123,23 @@ inline constexpr uintptr_t FIRE_FN = 0x0067F170, FIRE_BARREL_FN = 0x0067D7E0;
 inline constexpr uintptr_t ANIM_ASM_GLOBAL = 0x00DE450C;
 inline constexpr uintptr_t ASM_STATES = 0x18, STATE_FLAGS = 0x2C, INSTANCE_STATE = 0x18;
 // Soldier (BFSoldier): instances at +0x2F0, +0x330, +0x370, +0x3B0 (stride 0x40; 51 and 29 `lea` of the
-// first two before instance calls). The server's lower/upper are +0x2C4/+0x304, so +0x2F0 is taken as the
-// lower body and +0x330 the upper (tentative). Item, bits and aim are estimates: the server's offsets plus
-// the machines' delta 0x2C (L +0x3D8, +0x406, +0x2B0, +0x2B4).
+// first two before instance calls). The server's lower/upper are +0x2C4/+0x304. Session D (2026-11-17,
+// tests/fixtures/soldiers.txt): +0x2F0 is the lower body and +0x330 the upper (within 200 m of the local
+// player 133 of 135 and 127 of 135 equal the server's; farther away the client stops updating them), aim
+// +0x2DC/+0x2E0 as estimated (92 %), and item and bits sit 4 past the estimate (+0x408 66 of 66 changes,
+// +0x436 157 of 180), so the item is not the server's +0x3D8 plus 0x2C.
 inline constexpr uintptr_t SOL_LOWER = 0x2F0 + 0x18, SOL_UPPER = 0x330 + 0x18;
-inline constexpr uintptr_t SOL_ITEM = 0x404, SOL_BITS = 0x432;       // estimate
-inline constexpr uintptr_t SOL_PITCH = 0x2DC, SOL_TWIST = 0x2E0;     // estimate
+inline constexpr uintptr_t SOL_ITEM = 0x408, SOL_BITS = 0x436;
+inline constexpr uintptr_t SOL_PITCH = 0x2DC, SOL_TWIST = 0x2E0;
+// MusicPlayer (vtable 0x00B90654), Session D: the radio played song 0, was set to song 1, stopped, played
+// and stopped again, and the bytes followed the server's song events: playing the byte +0x161, the song
+// +0x168 and the time left +0x16C, the server's +0x144 and +0x148 (target_bfv_linded.c) 0x24 later as with
+// the control point. The group (always 0 there) is the server's +0x140 plus 0x24.
+inline constexpr uintptr_t MUS_PLAYING = 0x161, MUS_GROUP = 0x164, MUS_SONG = 0x168, MUS_LEFT = 0x16C;
+// The recording player's hit mark, Session D: a float on the local BFPlayer that jumps to 1.0 when one of
+// his rounds hits (every rise within 0.2 s of a hit the server credited to him; BF42++'s BF1942 one is +0x1CC).
+inline constexpr uintptr_t PLAYER_HITMARK = 0x1EC;
+// Names, Session D: a control point's name is an MSVC string at +0x2AC of its template (355 of 355), an
+// AnimationState's name an MSVC string at +0x12C of the state (3,328 of 3,328).
+inline constexpr uintptr_t CPT_NAME = 0x2AC, STATE_NAME = 0x12C;
 }  // namespace bfv
