@@ -11,6 +11,7 @@ bool finite4(const float q[4])
 }
 
 const uint64_t kPartStaleSamples = 150;   // ~5 s at 30 Hz, the server's parts_prune
+const double kMusicForgetS = 5.0;         // a radio missing from samples this long is a new one when back
 
 }  // namespace
 
@@ -146,7 +147,7 @@ void MusicTracker::sample(double t, const std::vector<LiveMusic>& players, std::
     for (const LiveMusic& m : players) {
         const float client = std::isfinite(m.left) && m.left >= 0.0f && m.left < 100000.0f ? m.left : 0.0f;
         auto it = last_.find(m.key);
-        State s{ m.playing, m.song, t, client, client, client };
+        State s{ m.playing, m.song, t, client, client, client, t };
         if (it == last_.end()) {
             if (m.playing) lines.push_back(rf::songLine(t, "play", m.rootNetId, m.song, m.group, client));
             seen[m.key] = s;
@@ -169,6 +170,8 @@ void MusicTracker::sample(double t, const std::vector<LiveMusic>& players, std::
         }
         seen[m.key] = s;
     }
+    for (const auto& kv : last_)
+        if (!seen.count(kv.first) && t - kv.second.seen <= kMusicForgetS) seen.insert(kv);
     last_.swap(seen);
 }
 

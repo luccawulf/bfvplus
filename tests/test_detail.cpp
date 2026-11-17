@@ -357,3 +357,19 @@ TEST(shot_queue_order_and_cap)
     q.clear();
     CHECK_EQ((int)q.dropped(), 0);
 }
+
+TEST(music_brief_absence)
+{
+    // A radio missing from a sample or two (its vehicle not read that moment) is the same radio when it
+    // is back: no fresh play. Gone over 5 s, it is a new one.
+    MusicTracker tr;
+    std::vector<std::string> l;
+    tr.sample(1, { LiveMusic{ 0x9000, 679, true, 0, 0, 135.2f } }, l);
+    l.clear();
+    tr.sample(1.5, {}, l);
+    tr.sample(2, { LiveMusic{ 0x9000, 679, true, 0, 0, 120.0f } }, l);
+    CHECK(l.empty());
+    tr.sample(10, {}, l);
+    tr.sample(16, { LiveMusic{ 0x9000, 679, true, 0, 0, 100.0f } }, l);
+    CHECK_EQ(l, std::vector<std::string>{ "{\"k\":\"e\",\"t\":16.000,\"e\":\"song\",\"a\":\"play\",\"id\":679,\"song\":0,\"group\":0,\"left\":100.0}" });
+}

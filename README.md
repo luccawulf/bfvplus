@@ -128,17 +128,22 @@ sampleHz      = 30   ; soldier and vehicle samples per second, 1-30
     the server replay recorder writes them
   - the players (the roster marks you)
   - every soldier and vehicle your client knows, at up to 30 samples a second
-- **Read-only:** it reads what your game already holds. It sends nothing and changes nothing about
-  gameplay, input or network traffic.
+  - their damage (hit points as your client holds them, in whole points), turrets, rotors and other
+    moving parts, engines, soldiers' animation states, aim and held weapon, and the animation table
+  - every round fired that your client sees, each with its muzzle and direction, yours marked
+  - the tickets, the control points' owners, the vehicle radios' songs, and your hit marks
+- **Read-only:** it reads what your game already holds. To see each round fired, it watches the six
+  places the game fires a barrel (the round itself is untouched). It sends nothing and changes nothing
+  about gameplay, input or network traffic.
 - **Your view of the round:** a client only hears about what the server sends it. Far-away
-  players update less often, and fast aircraft are shown as your client extrapolated them.
+  players update less often, and fast aircraft are shown as your client extrapolated them. Your client
+  also stops animating soldiers beyond about 200 m, so their recorded states can lag behind.
 - If BFV is installed under `Program Files`, Windows may keep the files in
   `%LOCALAPPDATA%\VirtualStore\Program Files\...\replays` instead (it redirects writes into
   protected folders).
 - If a game structure doesn't match what bfvplus expects (another patch level), the recorder
-  switches itself off and writes one line to `logs\bfvplus.log`. Everything else keeps working.
-
-Shots, armour, turrets, engines and soldier animations come in a later stage.
+  switches itself off and writes one line to `logs\bfvplus.log`. Everything else keeps working. If only
+  the firing places differ, it records everything but the rounds and says so in the same log.
 
 ## Build
 

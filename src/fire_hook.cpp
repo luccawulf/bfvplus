@@ -62,6 +62,7 @@ bool installFireHook()
             return false;
         }
     }
+    int patched = 0;
     for (const BfvSite* s : sites) {
         uint8_t* site = (uint8_t*)s->va;
         DWORD old;
@@ -69,8 +70,10 @@ bool installFireHook()
         *(int32_t*)(site + 1) = (int32_t)((uintptr_t)&hook_fireBarrel - (uintptr_t)(site + 5));
         VirtualProtect(site, 5, old, &old);
         FlushInstructionCache(GetCurrentProcess(), site, 5);
+        ++patched;
     }
-    done = true;
-    plusLog("fire hook on fireBarrel's six call sites");
-    return true;
+    done = true;   // a site patched can't be taken back here; never patch twice
+    if (patched == 6) plusLog("fire hook on fireBarrel's six call sites");
+    else plusLog("fire hook on %d of fireBarrel's six call sites (the others could not be made writable); some rounds will be missing", patched);
+    return patched > 0;
 }

@@ -53,7 +53,7 @@ std::atomic<bool> g_live{ false };          // a file is open: the fire hook que
 std::atomic<uintptr_t> g_localBF{ 0 };      // the recording player's BFPlayer, for a shot's `local`
 std::string g_path;
 bool g_loggedOpenFail = false, g_loggedRead = false, g_loggedListFail = false, g_loggedNoObjects = false;
-bool g_loggedDetail = false;
+bool g_loggedDetail = false, g_loggedDrops = false;
 int g_closesLogged = 0;
 unsigned g_samplesWithoutObjects = 0;
 
@@ -105,9 +105,10 @@ void noticeNewFile()
     g_hits.reset();
     g_music.reset();
     g_shots.clear();
+    g_localBF = 0;
     g_events.reset(new EventDecoder(templateNameById));
     templateCacheReset();
-    g_loggedRead = g_loggedListFail = g_loggedNoObjects = g_loggedDetail = false;
+    g_loggedRead = g_loggedListFail = g_loggedNoObjects = g_loggedDetail = g_loggedDrops = false;
     g_samplesWithoutObjects = 0;
     plusLog("replay: recording to %s", g_path.c_str());
 }
@@ -159,9 +160,16 @@ void replay_onEvent(void* ev)
     std::time_t tt = std::time(nullptr);
     std::tm local{};
     localtime_s(&local, &tt);
+    drainShots();   // into the file they were fired in, before a new join closes it
     g_session->onEvent(now, local, isServerInfo((int)type));
     logCloses();
-    if (type == 0x36) templateCacheReset();   // SetLevelEvent: a new level's templates
+    if (type == 0x36) {
+        // SetLevelEvent: a new level's templates, and control points and radios that may sit at the old
+        // ones' ids and addresses. Parts tell a reused address by its root and template already.
+        templateCacheReset();
+        g_cps.reset();
+        g_music.reset();
+    }
     if (!g_session->recording()) {
         g_live = false;
         if (!g_loggedOpenFail) { g_loggedOpenFail = true; plusLog("replay: cannot write %s", g_session->path().c_str()); }
@@ -209,7 +217,7 @@ static void sampleIfDue(uint64_t now)
     ReadStats st;
     DetailRead detail;
     const int n = readObjects(objects, &st, &detail);
-    AnimTable table;
+    AnimTable table{};
     bool tableRead = false;
     if (n >= 0) {
         g_objects.sample(t, objects, lines);   // d, o, s, a
@@ -232,6 +240,10 @@ static void sampleIfDue(uint64_t now)
     g_localBF = bf;
     g_hits.sample(t, pid, haveMark, mark, lines);
     for (const auto& l : lines) g_session->write(l);
+    if (!g_loggedDrops && g_shots.dropped()) {
+        g_loggedDrops = true;
+        plusLog("replay: rounds fired faster than they could be written; %u left out so far in this file", (unsigned)g_shots.dropped());
+    }
     // Once a file, when soldiers are in the sample: what stages 2-3 found, to check them in the lab.
     if (!g_loggedDetail && n >= 0 && !detail.soldiers.empty()) {
         g_loggedDetail = true;
@@ -270,6 +282,9 @@ void replay_shutdown()
         (void)g_events.release();
         return;
     }
-    if (g_session) g_session->close();
+    if (g_session) {
+        drainShots();
+        g_session->close();
+    }
     g_mu.unlock();
 }

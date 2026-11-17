@@ -297,7 +297,11 @@ bool readAnimTable(AnimTable& out)
     uintptr_t m = seh::u32(bfv::ANIM_ASM_GLOBAL);
     if (!seh::ptrSane(m)) return false;
     uintptr_t b = seh::u32(m + bfv::ASM_STATES), e = seh::u32(m + bfv::ASM_STATES + 4);
-    if (!seh::ptrSane(b) || e < b || (e - b) % 4) return false;
+    if (!seh::ptrSane(b) || e <= b || (e - b) % 4) return false;
+    // The manager has no vtable to check (its first dword is a heap pointer), so ask for a table that
+    // looks like one: the first and last entries point at states, and the first state has a name.
+    const uintptr_t first = seh::u32(b), last = seh::u32(e - 4);
+    if (!seh::ptrSane(first) || !seh::ptrSane(last) || seh::msvcString(first + bfv::STATE_NAME).empty()) return false;
     out.total = (e - b) / 4;
     if (out.total > kAnimStatesMax) return true;   // the tracker writes BF42++'s "skipped" line
     out.states.reserve(out.total);

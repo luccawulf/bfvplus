@@ -91,7 +91,8 @@ private:
 // `set` (the old song's time left) then `play` (the new song's length); a stop only when something
 // plays. The client's own countdown runs fast (Session D: 1.2 to 2.9 times real time) and a stopped
 // radio holds the full length, so only the length at a play is the client's: the time left after it
-// comes from this tracker's clock. A restart of the playing song (its time left jumps up) is a play.
+// comes from this tracker's clock. A restart of the playing song (its time left jumps up) is a play. A
+// radio missing from samples for up to 5 s (its vehicle not read then) is the same radio when it is back.
 struct LiveMusic { uintptr_t key; int rootNetId; bool playing; int song, group; float left; };
 class MusicTracker {
 public:
@@ -103,6 +104,7 @@ private:
         double t0; float left0;   // while playing: the time left at t0
         float frozen;             // while stopped: the time left when it stopped
         float client;             // the client's value at the last sample
+        double seen;              // when it was last in a sample (a radio gone over 5 s is forgotten)
         float leftAt(double t) const { return playing ? (left0 - float(t - t0) > 0 ? left0 - float(t - t0) : 0.0f) : frozen; }
     };
     std::unordered_map<uintptr_t, State> last_;
