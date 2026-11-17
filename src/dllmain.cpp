@@ -13,6 +13,7 @@
 #include "capture.h"
 #include "sensitivity.h"
 #include "replay.h"
+#include "fire_hook.h"
 #include "replay_probe.h"
 #include "replay_settings.h"
 #include "plus_log.h"
@@ -95,9 +96,9 @@ static DWORD WINAPI initThread(LPVOID)
         && (g_replay.record || g_replay.probe))
         plusLog("replay: this BfVietnam.exe doesn't match the event hook (0x005B3C14); not recording");
 
-    // The probe's fire hook (plan-1b Task 5): only with [replay] probe = on, and only when all six
+    // The fire hook (fire_hook.cpp): with [replay] recordReplays or probe on, and only when all six
     // fireBarrel call sites match (it logs which one didn't otherwise).
-    if (g_replay.probe) probe_installFireHook();
+    if (g_replay.record || g_replay.probe) installFireHook();
 
 
     // Stationary-MG sensitivity needs the InfantryControls / LandSeaControls objects,

@@ -259,23 +259,51 @@ TEST(hit_mark_rule)
 
 TEST(music_events)
 {
+    // Session D's radio as the server wrote it (`song` events on 679): play song 0 at 1.0 (135.2 s left),
+    // a pick of song 1 at 12.7 (set, with the old song's 123.5 s left, then play at its length 203.6), stop
+    // at 19.92 (196.4 s left), play again at 21.67. The client's own countdown (the 4th sample's 120.0, say)
+    // runs fast, so the times left come from the tracker's clock.
     MusicTracker tr;
     std::vector<std::string> l;
     tr.sample(1, { LiveMusic{ 0x9000, 679, true, 0, 0, 135.2f } }, l);
     CHECK_EQ(l, std::vector<std::string>{ "{\"k\":\"e\",\"t\":1.000,\"e\":\"song\",\"a\":\"play\",\"id\":679,\"song\":0,\"group\":0,\"left\":135.2}" });
     l.clear();
-    tr.sample(2, { LiveMusic{ 0x9000, 679, true, 0, 0, 134.2f } }, l);
+    tr.sample(2, { LiveMusic{ 0x9000, 679, true, 0, 0, 120.0f } }, l);
     CHECK(l.empty());
-    tr.sample(3, { LiveMusic{ 0x9000, 679, true, 2, 0, 90.0f } }, l);
-    CHECK_EQ(l, std::vector<std::string>{ "{\"k\":\"e\",\"t\":3.000,\"e\":\"song\",\"a\":\"set\",\"id\":679,\"song\":2,\"group\":0,\"left\":90.0}" });
+    tr.sample(12.7, { LiveMusic{ 0x9000, 679, true, 1, 0, 203.6f } }, l);
+    CHECK_EQ(l, (std::vector<std::string>{
+        "{\"k\":\"e\",\"t\":12.700,\"e\":\"song\",\"a\":\"set\",\"id\":679,\"song\":1,\"group\":0,\"left\":123.5}",
+        "{\"k\":\"e\",\"t\":12.700,\"e\":\"song\",\"a\":\"play\",\"id\":679,\"song\":1,\"group\":0,\"left\":203.6}" }));
     l.clear();
-    tr.sample(4, { LiveMusic{ 0x9000, 679, false, 2, 0, 89.0f } }, l);
+    tr.sample(19.9, { LiveMusic{ 0x9000, 679, false, 1, 0, 203.6f } }, l);
+    CHECK_EQ(l, std::vector<std::string>{ "{\"k\":\"e\",\"t\":19.900,\"e\":\"song\",\"a\":\"stop\",\"id\":679,\"song\":1,\"group\":0,\"left\":196.4}" });
+    l.clear();
+    tr.sample(21.0, { LiveMusic{ 0x9000, 679, false, 1, 0, 203.6f } }, l);
+    tr.sample(21.0, { LiveMusic{ 0x9000, 679, false, 1, 0, 203.6f }, LiveMusic{ 0x9100, 680, false, 0, 0, 0.0f } }, l);
+    CHECK(l.empty());
+    tr.sample(21.7, { LiveMusic{ 0x9000, 679, true, 1, 0, 203.6f } }, l);
+    CHECK_EQ(l, std::vector<std::string>{ "{\"k\":\"e\",\"t\":21.700,\"e\":\"song\",\"a\":\"play\",\"id\":679,\"song\":1,\"group\":0,\"left\":203.6}" });
+}
+
+TEST(music_restart_and_stopped_pick)
+{
+    // The same song picked again while it plays starts it over (the client's time left jumps up): play.
+    // A pick while stopped is a set only, with the time left where it stopped.
+    MusicTracker tr;
+    std::vector<std::string> l;
+    tr.sample(1, { LiveMusic{ 0x9000, 679, true, 0, 0, 100.0f } }, l);
+    l.clear();
+    tr.sample(5, { LiveMusic{ 0x9000, 679, true, 0, 0, 90.0f } }, l);
+    CHECK(l.empty());
+    tr.sample(6, { LiveMusic{ 0x9000, 679, true, 0, 0, 100.0f } }, l);
+    CHECK_EQ(l, std::vector<std::string>{ "{\"k\":\"e\",\"t\":6.000,\"e\":\"song\",\"a\":\"play\",\"id\":679,\"song\":0,\"group\":0,\"left\":100.0}" });
+    l.clear();
+    tr.sample(10, { LiveMusic{ 0x9000, 679, false, 0, 0, 100.0f } }, l);
     CHECK_EQ(count(l, "e"), 1);
-    CHECK(l[0].find("\"a\":\"stop\"") != std::string::npos);
+    CHECK(l[0].find("\"left\":96.0") != std::string::npos);
     l.clear();
-    tr.sample(5, { LiveMusic{ 0x9000, 679, false, 2, 0, 89.0f } }, l);
-    tr.sample(6, { LiveMusic{ 0x9100, 680, false, 0, 0, 0.0f } }, l);
-    CHECK(l.empty());
+    tr.sample(12, { LiveMusic{ 0x9000, 679, false, 3, 0, 80.0f } }, l);
+    CHECK_EQ(l, std::vector<std::string>{ "{\"k\":\"e\",\"t\":12.000,\"e\":\"song\",\"a\":\"set\",\"id\":679,\"song\":3,\"group\":0,\"left\":96.0}" });
 }
 
 TEST(shot_no_player)
@@ -307,4 +335,25 @@ TEST(shot_local)
     std::string out;
     CHECK(shotLine(2, s, out));
     CHECK(out.find(",\"local\":1}") != std::string::npos);
+}
+
+TEST(shot_queue_order_and_cap)
+{
+    // fireBarrel's rounds wait in the queue until the next hook writes them, oldest first; a full queue
+    // (nothing draining, say in the menu) drops the newest and counts them.
+    ShotQueue q(2);
+    LiveShot s{};
+    s.rootNetId = 1; q.push(100, s);
+    s.rootNetId = 2; q.push(110, s);
+    s.rootNetId = 3; q.push(120, s);
+    std::vector<QueuedShot> out;
+    q.drain(out);
+    CHECK_EQ((int)out.size(), 2);
+    CHECK(out[0].ms == 100 && out[0].shot.rootNetId == 1);
+    CHECK(out[1].ms == 110 && out[1].shot.rootNetId == 2);
+    CHECK_EQ((int)q.dropped(), 1);
+    q.drain(out);
+    CHECK(out.empty());
+    q.clear();
+    CHECK_EQ((int)q.dropped(), 0);
 }

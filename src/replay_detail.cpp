@@ -144,16 +144,30 @@ void MusicTracker::sample(double t, const std::vector<LiveMusic>& players, std::
 {
     std::unordered_map<uintptr_t, State> seen;
     for (const LiveMusic& m : players) {
-        seen[m.key] = State{ m.playing, m.song };
-        const float left = std::isfinite(m.left) ? m.left : 0.0f;
+        const float client = std::isfinite(m.left) && m.left >= 0.0f && m.left < 100000.0f ? m.left : 0.0f;
         auto it = last_.find(m.key);
+        State s{ m.playing, m.song, t, client, client, client };
         if (it == last_.end()) {
-            if (m.playing) lines.push_back(rf::songLine(t, "play", m.rootNetId, m.song, m.group, left));
+            if (m.playing) lines.push_back(rf::songLine(t, "play", m.rootNetId, m.song, m.group, client));
+            seen[m.key] = s;
             continue;
         }
-        if (m.song != it->second.song) lines.push_back(rf::songLine(t, "set", m.rootNetId, m.song, m.group, left));
-        if (m.playing && !it->second.playing) lines.push_back(rf::songLine(t, "play", m.rootNetId, m.song, m.group, left));
-        if (!m.playing && it->second.playing) lines.push_back(rf::songLine(t, "stop", m.rootNetId, m.song, m.group, left));
+        const State& o = it->second;
+        const float before = o.leftAt(t);
+        const bool picked = m.song != o.song;
+        const bool restarted = !picked && m.playing && o.playing && client > o.client + 2.0f;
+        if (picked) lines.push_back(rf::songLine(t, "set", m.rootNetId, m.song, m.group, before));
+        if (m.playing && (picked || restarted || !o.playing)) {
+            lines.push_back(rf::songLine(t, "play", m.rootNetId, m.song, m.group, client));
+        } else if (m.playing) {
+            s.t0 = o.t0; s.left0 = o.left0;   // still the same play: keep its clock
+        } else if (o.playing) {
+            lines.push_back(rf::songLine(t, "stop", m.rootNetId, m.song, m.group, before));
+            s.frozen = before;
+        } else {
+            s.frozen = o.frozen;              // stopped all along (a pick while stopped keeps it too)
+        }
+        seen[m.key] = s;
     }
     last_.swap(seen);
 }
@@ -164,4 +178,31 @@ bool shotLine(double t, const LiveShot& s, std::string& out)
     if (!shotFromMatrix(s.m, p, d)) return false;
     out = rf::fLine(t, s.rootNetId, s.pid, s.weapon, p, d, s.local);
     return true;
+}
+
+void ShotQueue::push(uint64_t ms, const LiveShot& s)
+{
+    std::lock_guard<std::mutex> lock(mu_);
+    if (q_.size() >= cap_) { ++dropped_; return; }
+    q_.push_back(QueuedShot{ ms, s });
+}
+
+void ShotQueue::drain(std::vector<QueuedShot>& out)
+{
+    out.clear();
+    std::lock_guard<std::mutex> lock(mu_);
+    out.swap(q_);
+}
+
+void ShotQueue::clear()
+{
+    std::lock_guard<std::mutex> lock(mu_);
+    q_.clear();
+    dropped_ = 0;
+}
+
+size_t ShotQueue::dropped() const
+{
+    std::lock_guard<std::mutex> lock(mu_);
+    return dropped_;
 }

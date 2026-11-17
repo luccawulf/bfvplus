@@ -5,11 +5,11 @@
 // engines, moving parts, radios, the animation table and the recording player's own fields.
 // Read-only (the fire hook only observes); SEH-guarded; nothing runs while the probe is off.
 #pragma once
+#include <cstdint>
 
 void probe_onEvent(void* ev);       // from the readEvent hook
 void probe_onInputPoll(int kind);   // from the mouse hooks: 0 GetDeviceState, 1 GetDeviceData
 
-// The probe's fire hook: each of FireArms::Fire's six calls to fireBarrel (0x0067D7E0) goes through a
-// thunk that logs the round, then calls fireBarrel. Patches nothing unless all six call sites and the
-// entry match (bfv_addresses.h SITE_fireBarrel*). Call once, only when the probe is on.
-bool probe_installFireHook();
+// One round from the fire hook (fire_hook.cpp), before fireBarrel runs: an `fb` line. Only while the
+// probe is on.
+void probe_onFire(uintptr_t fireArms, uintptr_t player, uintptr_t mat, int index);

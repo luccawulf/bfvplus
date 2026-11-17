@@ -91,6 +91,7 @@
     <ClCompile Include="src\replay_read.cpp" />
     <ClCompile Include="src\replay_detail.cpp" />
     <ClCompile Include="src\replay_decode.cpp" />
+    <ClCompile Include="src\fire_hook.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\buddycolors.h" />

@@ -629,7 +629,6 @@ void localDiff()
 }
 
 // ---- the fire hook ----------------------------------------------------------------------------
-typedef void(__thiscall* FireBarrelFn)(void* self, void* player, void* mat, int index);
 std::mutex g_fireMu;
 std::map<uintptr_t, int> g_fireCalls;   // FireArms -> calls logged, for the first-three raw dumps
 long g_fireLines = 0;
@@ -663,56 +662,11 @@ void noteFire(uintptr_t fa, uintptr_t player, uintptr_t mat, int index)
     out(line + "}");
 }
 
-void __fastcall hook_fireBarrel(void* self, void* /*edx*/, void* player, void* mat, int index)
-{
-    noteFire((uintptr_t)self, (uintptr_t)player, (uintptr_t)mat, index);
-    ((FireBarrelFn)bfv::FIRE_BARREL_FN)(self, player, mat, index);
-}
-
-bool bytesAt(uintptr_t va, const char* hex)
-{
-    uint8_t want[16];
-    size_t n = 0;
-    for (const char* p = hex; *p && n < sizeof(want);) {
-        while (*p == ' ') ++p;
-        if (!p[0] || !p[1]) break;
-        char b[3] = { p[0], p[1], 0 };
-        want[n++] = (uint8_t)std::strtoul(b, nullptr, 16);
-        p += 2;
-    }
-    uint8_t have[16];
-    return n && safeRead(va, have, n) && std::memcmp(have, want, n) == 0;
-}
-
 }  // namespace
 
-bool probe_installFireHook()
+void probe_onFire(uintptr_t fireArms, uintptr_t player, uintptr_t mat, int index)
 {
-    if ((uintptr_t)GetModuleHandleA(nullptr) != 0x00400000) return false;
-    const BfvSite* sites[] = { &SITE_fireBarrelCall1, &SITE_fireBarrelCall2, &SITE_fireBarrelCall3, &SITE_fireBarrelCall4,
-        &SITE_fireBarrelCall5, &SITE_fireBarrelCall6 };
-    if (!bytesAt(SITE_fireBarrelEntry.va, SITE_fireBarrelEntry.bytes)) {
-        plusLog("probe: fireBarrel's entry differs; fire hook not installed");
-        return false;
-    }
-    for (const BfvSite* s : sites) {
-        uint8_t* site = (uint8_t*)s->va;
-        if (!bytesAt(s->va, s->bytes) || site[0] != 0xE8
-            || (uintptr_t)(site + 5) + (uintptr_t)(*(int32_t*)(site + 1)) != bfv::FIRE_BARREL_FN) {
-            plusLog("probe: fireBarrel call site 0x%08X differs; fire hook not installed", (unsigned)s->va);
-            return false;
-        }
-    }
-    for (const BfvSite* s : sites) {
-        uint8_t* site = (uint8_t*)s->va;
-        DWORD old;
-        if (!VirtualProtect(site, 5, PAGE_EXECUTE_READWRITE, &old)) continue;
-        *(int32_t*)(site + 1) = (int32_t)((uintptr_t)&hook_fireBarrel - (uintptr_t)(site + 5));
-        VirtualProtect(site, 5, old, &old);
-        FlushInstructionCache(GetCurrentProcess(), site, 5);
-    }
-    plusLog("probe: fire hook on fireBarrel's six call sites");
-    return true;
+    noteFire(fireArms, player, mat, index);
 }
 
 void probe_onInputPoll(int kind)

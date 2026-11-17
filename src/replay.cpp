@@ -3,13 +3,18 @@
 // - replay_onEvent (the readEvent hook): the event's type, the session's join/connection rules, then
 //   the event's record from its payload (ev+12).
 // - replay_onInputPoll (the mouse hook, many times a second on the game thread): the 30 s silent end,
-//   the 2 s flush, and on each due sample the players, then the soldiers and vehicles.
+//   the 2 s flush, and on each due sample the players, then the soldiers and vehicles with their armour,
+//   parts, engines, states and radios, the control points, the tickets and the player's hit mark
+//   (stages 2-3, plan-1b; Session D's offsets).
 // - The event hook takes a due sample too, for the spawn screen, where the game stops polling the
 //   mouse but the server's events keep coming.
+// - replay_onFire (fire_hook.cpp, every round fireBarrel fires) queues the round; both hooks above write
+//   the queued rounds first, each at its own time, so the file stays in time order.
 // - replay_shutdown (DllMain at process exit): the end line and a last flush.
-// All three return at once while [replay] recordReplays is off.
+// All of them return at once while [replay] recordReplays is off.
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <atomic>
 #include <cctype>
 #include <ctime>
 #include <memory>
@@ -36,8 +41,19 @@ std::unique_ptr<ReplaySession> g_session;
 std::unique_ptr<EventDecoder> g_events;
 ObjectTracker g_objects;
 PlayerTracker g_players;
+// Stages 2-3 (plan-1b Tasks 9-10).
+TicketTracker g_tickets;
+CpTracker g_cps;
+PartTracker g_parts;
+SoldierTracker g_soldiers;
+HitMarkTracker g_hits;
+MusicTracker g_music;
+ShotQueue g_shots;
+std::atomic<bool> g_live{ false };          // a file is open: the fire hook queues rounds
+std::atomic<uintptr_t> g_localBF{ 0 };      // the recording player's BFPlayer, for a shot's `local`
 std::string g_path;
 bool g_loggedOpenFail = false, g_loggedRead = false, g_loggedListFail = false, g_loggedNoObjects = false;
+bool g_loggedDetail = false;
 int g_closesLogged = 0;
 unsigned g_samplesWithoutObjects = 0;
 
@@ -82,9 +98,16 @@ void noticeNewFile()
     g_path = g_session->path();
     g_objects.reset();
     g_players.reset();
+    g_tickets.reset();
+    g_cps.reset();
+    g_parts.reset();
+    g_soldiers.reset();
+    g_hits.reset();
+    g_music.reset();
+    g_shots.clear();
     g_events.reset(new EventDecoder(templateNameById));
     templateCacheReset();
-    g_loggedRead = g_loggedListFail = g_loggedNoObjects = false;
+    g_loggedRead = g_loggedListFail = g_loggedNoObjects = g_loggedDetail = false;
     g_samplesWithoutObjects = 0;
     plusLog("replay: recording to %s", g_path.c_str());
 }
@@ -98,9 +121,32 @@ void logCloses()
     plusLog("replay: closed %s (%s), end t=%.3f", g_path.c_str(), g_session->lastClose().c_str(), g_session->lastActivityT());
 }
 
+// The rounds fired since the last hook, each at its own time, before the hook writes anything else (so
+// the file stays in time order). Called with g_mu held.
+void drainShots()
+{
+    static std::vector<QueuedShot> q;
+    g_shots.drain(q);
+    if (q.empty() || !g_session || !g_session->recording()) return;
+    std::string line;
+    for (const QueuedShot& s : q)
+        if (shotLine(g_session->t(s.ms), s.shot, line)) g_session->write(line);
+}
+
 }  // namespace
 
 static void sampleIfDue(uint64_t now);
+
+// fire_hook.cpp, once per round (game thread, without g_mu: it only reads the game and queues).
+void replay_onFire(uintptr_t fireArms, uintptr_t player, uintptr_t mat)
+{
+    if (!g_live.load(std::memory_order_relaxed)) return;
+    LiveShot s;
+    uintptr_t bf = 0;
+    if (!readShot(fireArms, player, mat, s, bf)) return;
+    s.local = bf && bf == g_localBF.load(std::memory_order_relaxed);
+    g_shots.push(nowMs(), s);
+}
 
 void replay_onEvent(void* ev)
 {
@@ -117,11 +163,14 @@ void replay_onEvent(void* ev)
     logCloses();
     if (type == 0x36) templateCacheReset();   // SetLevelEvent: a new level's templates
     if (!g_session->recording()) {
+        g_live = false;
         if (!g_loggedOpenFail) { g_loggedOpenFail = true; plusLog("replay: cannot write %s", g_session->path().c_str()); }
         return;
     }
     g_loggedOpenFail = false;
     noticeNewFile();
+    g_live = true;
+    drainShots();
     uint8_t payload[kPayloadBytes];
     size_t n = kPayloadBytes;
     if (!seh::read((uintptr_t)ev + bfv::EVENT_PAYLOAD, payload, n)) {
@@ -148,6 +197,8 @@ static void sampleIfDue(uint64_t now)
 {
     const bool due = g_session->onFrame(now, localPlayerPresent());
     logCloses();
+    g_live = g_session->recording();
+    drainShots();
     if (!due || !g_session->recording()) return;
     const double t = g_session->t(now);
     std::vector<std::string> lines;
@@ -156,10 +207,42 @@ static void sampleIfDue(uint64_t now)
     g_players.sample(t, players, lines);
     std::vector<LiveObject> objects;
     ReadStats st;
-    const int n = readObjects(objects, &st);
-    if (n >= 0) g_objects.sample(t, objects, lines);
-    else if (!g_loggedListFail) { g_loggedListFail = true; plusLog("replay: the object list can't be read; recording events and players only"); }
+    DetailRead detail;
+    const int n = readObjects(objects, &st, &detail);
+    AnimTable table;
+    bool tableRead = false;
+    if (n >= 0) {
+        g_objects.sample(t, objects, lines);   // d, o, s, a
+        g_parts.sample(t, detail.parts, detail.engines, lines);   // jn, j, g
+        if (!detail.soldiers.empty() && g_soldiers.needsAnimTable()) tableRead = readAnimTable(table);
+        g_soldiers.sample(t, detail.soldiers, tableRead ? &table : nullptr, lines);   // anim once, st
+        g_cps.sample(t, detail.cps, lines);
+        g_music.sample(t, detail.music, lines);
+    } else if (!g_loggedListFail) {
+        g_loggedListFail = true;
+        plusLog("replay: the object list can't be read; recording events and players only");
+    }
+    LiveTickets tickets{};
+    readTickets(tickets);
+    g_tickets.sample(t, tickets, lines);
+    float mark = 0;
+    int pid = -1;
+    uintptr_t bf = 0;
+    const bool haveMark = readHitMark(mark, pid, bf);
+    g_localBF = bf;
+    g_hits.sample(t, pid, haveMark, mark, lines);
     for (const auto& l : lines) g_session->write(l);
+    // Once a file, when soldiers are in the sample: what stages 2-3 found, to check them in the lab.
+    if (!g_loggedDetail && n >= 0 && !detail.soldiers.empty()) {
+        g_loggedDetail = true;
+        unsigned armoured = 0;
+        for (const auto& o : objects) armoured += o.hasArmor;
+        plusLog("replay: detail: armour %u of %u, soldiers %u, parts %u, engines %u, radios %u, control points %u; tickets %s; "
+                "animation table %s (%u states)", armoured, (unsigned)objects.size(), (unsigned)detail.soldiers.size(),
+            (unsigned)detail.parts.size(), (unsigned)detail.engines.size(), (unsigned)detail.music.size(),
+            (unsigned)detail.cps.size(), tickets.valid ? "read" : "not found", tableRead ? "read" : "not read",
+            (unsigned)table.total);
+    }
     // Once a file, when in game: what the walk found, to check the offsets against the real game.
     if (!g_loggedRead && n >= 0 && !players.empty() && st.soldiers + st.vehicles > 0) {
         g_loggedRead = true;
@@ -178,6 +261,7 @@ static void sampleIfDue(uint64_t now)
 
 void replay_shutdown()
 {
+    g_live = false;
     // At process exit the game's threads are already gone; one may have died holding the lock, so
     // never wait for it (the file then just keeps what its last flush wrote).
     if (!g_mu.try_lock()) {

@@ -2,9 +2,12 @@
 //   replay_onEvent     from capture.cpp's readEvent hook, once per GameEvent the server sends
 //   replay_onInputPoll from sensitivity.cpp's mouse GetDeviceState/GetDeviceData hooks
 //   replay_shutdown    from DllMain at process detach
+//   replay_onFire      from fire_hook.cpp, once per round fireBarrel fires (stage 2: `f` lines)
 // All three return at once when [replay] recordReplays is off.
 #pragma once
+#include <cstdint>
 
 void replay_onEvent(void* ev);
 void replay_onInputPoll();
 void replay_shutdown();
+void replay_onFire(uintptr_t fireArms, uintptr_t player, uintptr_t mat);

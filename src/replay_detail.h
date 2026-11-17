@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -86,13 +87,24 @@ private:
     double lastAt_ = -1e300;
 };
 
+// Song events as the server writes them at MusicPlayer::setSongId, play and stop: a pick while playing is
+// `set` (the old song's time left) then `play` (the new song's length); a stop only when something
+// plays. The client's own countdown runs fast (Session D: 1.2 to 2.9 times real time) and a stopped
+// radio holds the full length, so only the length at a play is the client's: the time left after it
+// comes from this tracker's clock. A restart of the playing song (its time left jumps up) is a play.
 struct LiveMusic { uintptr_t key; int rootNetId; bool playing; int song, group; float left; };
 class MusicTracker {
 public:
     void sample(double t, const std::vector<LiveMusic>& players, std::vector<std::string>& lines);
     void reset() { last_.clear(); }
 private:
-    struct State { bool playing; int song; };
+    struct State {
+        bool playing; int song;
+        double t0; float left0;   // while playing: the time left at t0
+        float frozen;             // while stopped: the time left when it stopped
+        float client;             // the client's value at the last sample
+        float leftAt(double t) const { return playing ? (left0 - float(t - t0) > 0 ? left0 - float(t - t0) : 0.0f) : frozen; }
+    };
     std::unordered_map<uintptr_t, State> last_;
 };
 
@@ -100,3 +112,20 @@ private:
 // name, its Mat4 (16 floats) and whether the recording player fired it.
 struct LiveShot { int rootNetId, pid; std::string weapon; float m[16]; bool local; };
 bool shotLine(double t, const LiveShot& s, std::string& out);
+
+// fireBarrel's rounds between two of the recorder's hooks: the fire hook pushes (game thread, without
+// the recorder's lock), the next event or poll drains them in order, before its own lines, so the file
+// stays in time order. At most `cap` wait; more are dropped and counted (nothing drains in the menu).
+struct QueuedShot { uint64_t ms; LiveShot shot; };
+class ShotQueue {
+public:
+    explicit ShotQueue(size_t cap = 4096) : cap_(cap) {}
+    void push(uint64_t ms, const LiveShot& s);
+    void drain(std::vector<QueuedShot>& out);   // replaces out's contents
+    void clear();                               // a new file: forget the waiting rounds and the count
+    size_t dropped() const;
+private:
+    mutable std::mutex mu_;
+    std::vector<QueuedShot> q_;
+    size_t cap_, dropped_ = 0;
+};

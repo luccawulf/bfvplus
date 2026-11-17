@@ -88,12 +88,113 @@ uintptr_t playerManager()
     return seh::ptrSane(pm) && seh::u32(pm) == VT_PlayerManager.va ? pm : 0;
 }
 
+// ---- stages 2-3 -----------------------------------------------------------------------------
+std::unordered_map<uintptr_t, std::string> g_tmplName;   // template -> name, for parts and shots
+
+const std::string& cachedTemplateName(uintptr_t tmpl)
+{
+    auto it = g_tmplName.find(tmpl);
+    if (it != g_tmplName.end()) return it->second;
+    return g_tmplName[tmpl] = seh::ptrSane(tmpl) ? templateName(tmpl) : std::string();
+}
+
+uintptr_t rootOf(uintptr_t obj)
+{
+    uintptr_t r = obj;
+    for (int d = 0; d < 16; ++d) {
+        uintptr_t p = seh::u32(r + bfv::OBJ_PARENT);
+        if (!seh::ptrSane(p)) break;
+        r = p;
+    }
+    return r;
+}
+
+// An object's Armor: the value under ARMOR_IID in its component map (an MSVC std::map, head node at
+// obj+0xDC, walked in order from the leftmost as the probe did; objects hold a handful of components).
+uintptr_t armorOf(uintptr_t obj)
+{
+    uintptr_t head = seh::u32(obj + bfv::COMP_MAP_HEAD);
+    if (!seh::ptrSane(head)) return 0;
+    uintptr_t node = seh::u32(head + 0);
+    for (int n = 0; n < 16 && node != head && seh::ptrSane(node); ++n) {
+        if (seh::u32(node + bfv::COMP_NODE_KEY) == bfv::ARMOR_IID) {
+            uintptr_t v = seh::u32(node + bfv::COMP_NODE_VALUE);
+            return seh::ptrSane(v) && seh::u32(v) == VT_Armor.va ? v : 0;
+        }
+        node = treeSucc(node, head);
+    }
+    return 0;
+}
+
+struct RootInfo { int net; bool vehicle; float rows[16]; };
+
+void readArmorInto(uintptr_t obj, LiveObject& o)
+{
+    uintptr_t a = armorOf(obj);
+    uint8_t b[bfv::ARMOR_DESTROYED + 1];
+    ArmorFields f{};
+    if (!a || !seh::read(a, b, sizeof(b)) || !decodeArmor(b, sizeof(b), f)) return;
+    o.hasArmor = true;
+    o.hp = f.hp;
+    o.maxhp = f.maxhp;
+    o.crit = f.crit;
+    o.lastHit = f.lastHit;
+}
+
+// The children and other classes the walk set aside, resolved against the sampled roots.
+void readDetail(const std::vector<std::pair<uintptr_t, uintptr_t>>& pending,
+    const std::unordered_map<uintptr_t, RootInfo>& roots, DetailRead& d)
+{
+    for (const auto& pv : pending) {
+        const uintptr_t obj = pv.first, vt = pv.second;
+        if (vt == VT_ControlPoint.va) {
+            LiveControlPoint cp{};
+            uint8_t b[bfv::CP_TEAM + 4];
+            if (!seh::read(obj, b, sizeof(b)) || !decodeCpTeam(b, sizeof(b), cp.team)) continue;
+            uintptr_t tmpl = seh::u32(obj + bfv::OBJ_TEMPLATE);
+            cp.id = (int)seh::u32(obj + bfv::OBJ_ID);
+            cp.tmpl = cachedTemplateName(tmpl);
+            cp.name = seh::ptrSane(tmpl) ? seh::msvcString(tmpl + bfv::CPT_NAME) : std::string();
+            float p[3];
+            cp.hasPos = seh::read(obj + bfv::OBJ_POS, p, sizeof(p)) && std::isfinite(p[0]) && std::isfinite(p[1]) && std::isfinite(p[2]);
+            cp.x = cp.hasPos ? p[0] : 0; cp.y = cp.hasPos ? p[1] : 0; cp.z = cp.hasPos ? p[2] : 0;
+            d.cps.push_back(cp);
+            continue;
+        }
+        auto r = roots.find(rootOf(obj));
+        if (r == roots.end()) continue;
+        const RootInfo& root = r->second;
+        const uintptr_t tmpl = seh::u32(obj + bfv::OBJ_TEMPLATE);
+        if (vt == VT_RotationalBundle.va) {
+            LivePart p{};
+            if (!seh::read(obj + bfv::OBJ_ROWS, p.rows, sizeof(p.rows))) continue;
+            p.key = obj; p.tmplKey = tmpl; p.rootNetId = root.net; p.name = cachedTemplateName(tmpl);
+            std::memcpy(p.rootRows, root.rows, sizeof(p.rootRows));
+            d.parts.push_back(p);
+        } else if (vt == VT_Engine.va) {
+            uintptr_t pe = seh::u32(obj + bfv::ENG_PHYS);
+            uint8_t eb[bfv::ENG_DISABLED + 1], pb[bfv::PE_GEAR + 4];
+            EngineFields f{};
+            if (!seh::ptrSane(pe) || seh::u32(pe) != VT_PhysicsEngine.va || !seh::read(obj, eb, sizeof(eb))
+                || !seh::read(pe, pb, sizeof(pb)) || !decodeEngine(eb, sizeof(eb), pb, sizeof(pb), f))
+                continue;
+            d.engines.push_back(LiveEngine{ obj, tmpl, root.net, f.revs, f.throttle, f.flags, f.gear });
+        } else if (vt == VT_MusicPlayer.va) {
+            uint8_t b[bfv::MUS_LEFT + 4];
+            MusicFields f{};
+            if (!seh::read(obj, b, sizeof(b)) || !decodeMusic(b, sizeof(b), f)) continue;
+            d.music.push_back(LiveMusic{ obj, root.net, f.playing, f.song, f.group, f.left });
+        }
+    }
+}
+
 }  // namespace
 
 void templateCacheReset()
 {
     g_idToName.clear();
     g_tmplToId.clear();
+    g_tmplName.clear();
     g_walkedOnce = false;
 }
 
@@ -106,9 +207,12 @@ std::string templateNameById(uint32_t id)
     return it == g_idToName.end() ? std::string() : it->second;
 }
 
-int readObjects(std::vector<LiveObject>& out, ReadStats* stats)
+int readObjects(std::vector<LiveObject>& out, ReadStats* stats, DetailRead* detail)
 {
     out.clear();
+    if (detail) *detail = DetailRead{};
+    std::vector<std::pair<uintptr_t, uintptr_t>> pending;   // (object, vtable) for readDetail
+    std::unordered_map<uintptr_t, RootInfo> roots;
     ReadStats st;
     bool ok;
     uintptr_t mgr = seh::u32(bfv::OBJMGR_GLOBAL, &ok);
@@ -123,6 +227,10 @@ int readObjects(std::vector<LiveObject>& out, ReadStats* stats)
         node = seh::u32(node + bfv::LIST_NEXT);
         st.walked++;
         uintptr_t vt = seh::u32(obj);
+        if (detail && (vt == VT_RotationalBundle.va || vt == VT_Engine.va || vt == VT_MusicPlayer.va || vt == VT_ControlPoint.va)) {
+            pending.emplace_back(obj, vt);
+            continue;
+        }
         if (vt != VT_PCO && vt != VT_SOLDIER) continue;
         if (seh::u32(obj + bfv::OBJ_PARENT)) continue;          // a seat or part: the root carries it
         int net = netIdOf(obj);
@@ -138,11 +246,85 @@ int readObjects(std::vector<LiveObject>& out, ReadStats* stats)
         if (it == g_tmplToId.end()) { walkTemplates(); it = g_tmplToId.find(tmpl); }
         o.tid = it == g_tmplToId.end() ? 0 : (int)it->second;
         o.team = 0;
+        if (detail) {
+            readArmorInto(obj, o);
+            RootInfo& ri = roots[obj];
+            ri.net = net;
+            ri.vehicle = vt == VT_PCO;
+            std::memcpy(ri.rows, o.rows, sizeof(ri.rows));
+            uint8_t sb[bfv::SOL_BITS + 2];
+            LiveSoldier ls{};
+            ls.netId = net;
+            if (vt == VT_SOLDIER && seh::read(obj, sb, sizeof(sb)) && decodeSoldier(sb, sizeof(sb), ls.f))
+                detail->soldiers.push_back(ls);
+        }
         out.push_back(o);
         if (vt == VT_SOLDIER) st.soldiers++; else st.vehicles++;
     }
+    if (detail) readDetail(pending, roots, *detail);
     if (stats) *stats = st;
     return (int)out.size();
+}
+
+bool readTickets(LiveTickets& out)
+{
+    out = LiveTickets{ false, 0, 0 };
+    uintptr_t sm = seh::u32(bfv::SCOREMGR_GLOBAL);
+    const size_t n = bfv::SCORE_TEAM_BASE + 2 * bfv::SCORE_TEAM_STRIDE + bfv::SCORE_TICKETS + 4;
+    uint8_t b[n];
+    if (!seh::ptrSane(sm) || seh::u32(sm) != VT_ScoreManager.va || !seh::read(sm, b, n)) return false;
+    out.valid = decodeTickets(b, n, out.team1, out.team2);
+    return out.valid;
+}
+
+bool readHitMark(float& v, int& pid, uintptr_t& bfPlayer)
+{
+    v = 0;
+    pid = -1;
+    bfPlayer = 0;
+    uintptr_t pm = playerManager(), local = 0;
+    if (!pm || !seh::vcall0(pm, bfv::VSLOT_LOCAL_PLAYER, &local) || !seh::ptrSane(local)) return false;
+    bfPlayer = local;
+    bool ok;
+    pid = (int)seh::u32(local + bfv::PLAYER_ID, &ok);
+    return ok && seh::read(local + bfv::PLAYER_HITMARK, &v, sizeof(v));
+}
+
+bool readAnimTable(AnimTable& out)
+{
+    out.states.clear();
+    out.total = 0;
+    uintptr_t m = seh::u32(bfv::ANIM_ASM_GLOBAL);
+    if (!seh::ptrSane(m)) return false;
+    uintptr_t b = seh::u32(m + bfv::ASM_STATES), e = seh::u32(m + bfv::ASM_STATES + 4);
+    if (!seh::ptrSane(b) || e < b || (e - b) % 4) return false;
+    out.total = (e - b) / 4;
+    if (out.total > kAnimStatesMax) return true;   // the tracker writes BF42++'s "skipped" line
+    out.states.reserve(out.total);
+    for (size_t i = 0; i < out.total; ++i) {
+        uintptr_t s = seh::u32(b + 4 * i);
+        if (!seh::ptrSane(s)) continue;
+        out.states.push_back(rf::AnimState{ (int)i, seh::msvcString(s + bfv::STATE_NAME), seh::u32(s + bfv::STATE_FLAGS) });
+    }
+    return true;
+}
+
+bool readShot(uintptr_t fireArms, uintptr_t iplayer, uintptr_t mat, LiveShot& out, uintptr_t& bfPlayer)
+{
+    out = LiveShot{};
+    bfPlayer = 0;
+    if (!seh::read(mat, out.m, sizeof(out.m))) return false;
+    uintptr_t vt = seh::ptrSane(iplayer) ? seh::u32(iplayer) : 0;
+    if (vt == VT_PLAYER) bfPlayer = iplayer;
+    else if (vt == VT_PLAYER_4) bfPlayer = iplayer - 4;
+    else if (vt == VT_PLAYER_8) bfPlayer = iplayer - 8;
+    bool ok = false;
+    out.pid = bfPlayer ? (int)seh::u32(bfPlayer + bfv::PLAYER_ID, &ok) : -1;
+    if (bfPlayer && !ok) out.pid = -1;
+    out.rootNetId = netIdOf(rootOf(fireArms));
+    uintptr_t tmpl = seh::u32(fireArms + bfv::OBJ_TEMPLATE);
+    out.weapon = seh::ptrSane(tmpl) ? templateName(tmpl) : std::string();   // not the cache: another thread may sample
+    return true;
 }
 
 int readPlayers(std::vector<LivePlayer>& out)
