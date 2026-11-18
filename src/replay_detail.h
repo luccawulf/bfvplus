@@ -105,6 +105,8 @@ private:
         float frozen;             // while stopped: the time left when it stopped
         float client;             // the client's value at the last sample
         double seen;              // when it was last in a sample (a radio gone over 5 s is forgotten)
+        double pendT = -1;        // a jump up of the time left waiting to prove a restart (-1: none)...
+        float pendClient = 0;     // ...and the client's time left at the jump
         float leftAt(double t) const { return playing ? (left0 - float(t - t0) > 0 ? left0 - float(t - t0) : 0.0f) : frozen; }
     };
     std::unordered_map<uintptr_t, State> last_;

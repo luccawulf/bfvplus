@@ -287,8 +287,9 @@ TEST(music_events)
 
 TEST(music_restart_and_stopped_pick)
 {
-    // The same song picked again while it plays starts it over (the client's time left jumps up): play.
-    // A pick while stopped is a set only, with the time left where it stopped.
+    // The same song picked again while it plays starts it over (the client's time left jumps up): play,
+    // once the song is still playing half a second on, from the jump's clock. A pick while stopped is a set
+    // only, with the time left where it stopped.
     MusicTracker tr;
     std::vector<std::string> l;
     tr.sample(1, { LiveMusic{ 0x9000, 679, true, 0, 0, 100.0f } }, l);
@@ -296,7 +297,11 @@ TEST(music_restart_and_stopped_pick)
     tr.sample(5, { LiveMusic{ 0x9000, 679, true, 0, 0, 90.0f } }, l);
     CHECK(l.empty());
     tr.sample(6, { LiveMusic{ 0x9000, 679, true, 0, 0, 100.0f } }, l);
-    CHECK_EQ(l, std::vector<std::string>{ "{\"k\":\"e\",\"t\":6.000,\"e\":\"song\",\"a\":\"play\",\"id\":679,\"song\":0,\"group\":0,\"left\":100.0}" });
+    CHECK(l.empty());
+    tr.sample(6.3, { LiveMusic{ 0x9000, 679, true, 0, 0, 99.5f } }, l);
+    CHECK(l.empty());
+    tr.sample(6.6, { LiveMusic{ 0x9000, 679, true, 0, 0, 99.0f } }, l);
+    CHECK_EQ(l, std::vector<std::string>{ "{\"k\":\"e\",\"t\":6.600,\"e\":\"song\",\"a\":\"play\",\"id\":679,\"song\":0,\"group\":0,\"left\":99.4}" });
     l.clear();
     tr.sample(10, { LiveMusic{ 0x9000, 679, false, 0, 0, 100.0f } }, l);
     CHECK_EQ(count(l, "e"), 1);
@@ -304,6 +309,30 @@ TEST(music_restart_and_stopped_pick)
     l.clear();
     tr.sample(12, { LiveMusic{ 0x9000, 679, false, 3, 0, 80.0f } }, l);
     CHECK_EQ(l, std::vector<std::string>{ "{\"k\":\"e\",\"t\":12.000,\"e\":\"song\",\"a\":\"set\",\"id\":679,\"song\":3,\"group\":0,\"left\":96.0}" });
+}
+
+TEST(music_rewind_before_a_pick_or_stop)
+{
+    // Session E: the player's own radio first rewinds the song it is playing to its full length (one
+    // sample, still playing), then takes the new song or stops. The server writes no play for the rewind,
+    // and its set and stop carry the time left from before it.
+    MusicTracker tr;
+    std::vector<std::string> l;
+    tr.sample(1, { LiveMusic{ 0x9000, 612, true, 0, 0, 135.2f } }, l);
+    l.clear();
+    tr.sample(11.5, { LiveMusic{ 0x9000, 612, true, 0, 0, 118.0f } }, l);   // the client's fast countdown
+    tr.sample(11.6, { LiveMusic{ 0x9000, 612, true, 0, 0, 135.1f } }, l);
+    CHECK(l.empty());
+    tr.sample(11.633, { LiveMusic{ 0x9000, 612, true, 2, 0, 169.8f } }, l);
+    CHECK_EQ(l, (std::vector<std::string>{
+        "{\"k\":\"e\",\"t\":11.633,\"e\":\"song\",\"a\":\"set\",\"id\":612,\"song\":2,\"group\":0,\"left\":124.6}",
+        "{\"k\":\"e\",\"t\":11.633,\"e\":\"song\",\"a\":\"play\",\"id\":612,\"song\":2,\"group\":0,\"left\":169.8}" }));
+    l.clear();
+    tr.sample(22.5, { LiveMusic{ 0x9000, 612, true, 2, 0, 150.0f } }, l);
+    tr.sample(22.6, { LiveMusic{ 0x9000, 612, true, 2, 0, 169.9f } }, l);
+    CHECK(l.empty());
+    tr.sample(22.633, { LiveMusic{ 0x9000, 612, false, 2, 0, 169.9f } }, l);
+    CHECK_EQ(l, std::vector<std::string>{ "{\"k\":\"e\",\"t\":22.633,\"e\":\"song\",\"a\":\"stop\",\"id\":612,\"song\":2,\"group\":0,\"left\":158.8}" });
 }
 
 TEST(shot_no_player)

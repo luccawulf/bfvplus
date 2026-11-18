@@ -12,6 +12,7 @@ bool finite4(const float q[4])
 
 const uint64_t kPartStaleSamples = 150;   // ~5 s at 30 Hz, the server's parts_prune
 const double kMusicForgetS = 5.0;         // a radio missing from samples this long is a new one when back
+const double kRestartHoldS = 0.5;         // a jump up of the time left is a restart once the song plays this long on
 
 }  // namespace
 
@@ -156,12 +157,23 @@ void MusicTracker::sample(double t, const std::vector<LiveMusic>& players, std::
         const State& o = it->second;
         const float before = o.leftAt(t);
         const bool picked = m.song != o.song;
-        const bool restarted = !picked && m.playing && o.playing && client > o.client + 2.0f;
+        const bool jumped = !picked && m.playing && o.playing && client > o.client + 2.0f;
         if (picked) lines.push_back(rf::songLine(t, "set", m.rootNetId, m.song, m.group, before));
-        if (m.playing && (picked || restarted || !o.playing)) {
+        if (m.playing && (picked || !o.playing)) {
             lines.push_back(rf::songLine(t, "play", m.rootNetId, m.song, m.group, client));
         } else if (m.playing) {
             s.t0 = o.t0; s.left0 = o.left0;   // still the same play: keep its clock
+            // The player's own radio rewinds the song it plays to its full length a sample before it takes a
+            // new song or stops (Session E), and the server writes nothing for that: a jump up is a restart
+            // only once the same song still plays half a second on, and until then the old clock holds.
+            if (jumped && o.pendT < 0) {
+                s.pendT = t; s.pendClient = client;
+            } else if (o.pendT >= 0 && t - o.pendT >= kRestartHoldS) {
+                s.t0 = o.pendT; s.left0 = o.pendClient;
+                lines.push_back(rf::songLine(t, "play", m.rootNetId, m.song, m.group, s.leftAt(t)));
+            } else if (o.pendT >= 0) {
+                s.pendT = o.pendT; s.pendClient = o.pendClient;
+            }
         } else if (o.playing) {
             lines.push_back(rf::songLine(t, "stop", m.rootNetId, m.song, m.group, before));
             s.frozen = before;
