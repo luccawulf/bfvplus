@@ -231,6 +231,20 @@ int readObjects(std::vector<LiveObject>& out, ReadStats* stats, DetailRead* deta
             pending.emplace_back(obj, vt);
             continue;
         }
+        // Rounds in flight (replay-recorder-2), as the server recorder takes them: an enabled root whose
+        // vtable is exactly Projectile's. Rockets, bombs and missiles (the SA-7 included) fly on every
+        // client as their own objects; a pooled round sits disabled between flights.
+        if (vt == VT_Projectile.va) {
+            if (!detail || detail->projectiles.size() >= 1024) continue;
+            const uint32_t flags = seh::u32(obj + bfv::OBJ_FLAGS, &ok);
+            if (!ok || (flags & bfv::OBJ_FLAG_DISABLED) || seh::u32(obj + bfv::OBJ_PARENT)) continue;
+            float p[3];
+            if (!seh::read(obj + bfv::OBJ_POS, p, sizeof(p))) continue;
+            uintptr_t tmpl = seh::u32(obj + bfv::OBJ_TEMPLATE);
+            detail->projectiles.push_back(LiveProjectile{ (int)seh::u32(obj + bfv::OBJ_ID),
+                seh::ptrSane(tmpl) ? templateName(tmpl) : std::string(), p[0], p[1], p[2] });
+            continue;
+        }
         if (vt != VT_PCO && vt != VT_SOLDIER) continue;
         if (seh::u32(obj + bfv::OBJ_PARENT)) continue;          // a seat or part: the root carries it
         int net = netIdOf(obj);

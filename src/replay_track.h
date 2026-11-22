@@ -9,7 +9,10 @@
 //   everyone; later samples write `p` rows only for players whose row changed
 // Platform-independent: replay_read.cpp fills the Live* structs from game memory.
 #pragma once
+#include <cstddef>
+#include <cstdint>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 #include "replay_format.h"
@@ -31,6 +34,54 @@ public:
 private:
     struct Known { int gid; rf::Pose pose; bool hasArmor = false; float hp = 0; int lastHit = -1; };
     std::map<int, Known> known_;
+};
+
+// ---- replay-recorder-2 -------------------------------------------------------------------------
+
+// A round in flight: an enabled root Projectile (vtable 0x00B92294) in the object list, keyed by its
+// object manager id (obj+0x48), with its template's name and place.
+struct LiveProjectile { int key; std::string tmpl; float x, y, z; };
+
+// pn on a flight's first sample, one pj line a sample with every flight whose place is numbers, and
+// one pd line for the flights gone since the last sample (a pooled round flies again under its key
+// with a new pn). At most 1024 flights at once, as on the server.
+class ProjectileTracker {
+public:
+    void sample(double t, const std::vector<LiveProjectile>& flights, std::vector<std::string>& lines);
+    void reset() { flying_.clear(); }
+
+private:
+    std::set<int> flying_;
+};
+
+// The info line: written once the level and the player's name are known, and again whenever one of
+// the four changes (a new round's level on the same connection). The server's name comes from
+// ServerInfoEvent2 (0x1b: char[32]) and the level and mode from SetLevelEvent (0x36: char[64] level
+// path, char[64] mode file), the same payloads replay_events.cpp writes as serverName and setLevel.
+class InfoTracker {
+public:
+    void onEvent(int type, const uint8_t* payload, size_t n);
+    void sample(double t, const std::string& player, std::vector<std::string>& lines);
+    void reset() { server_.clear(); level_.clear(); mode_.clear(); written_.clear(); }
+
+private:
+    std::string server_, level_, mode_, written_;
+};
+
+// Soldiers beyond the client's animation range. BFV stops animating soldiers about 200 m from the
+// player (README section 4; the distance is the lab's estimate, not read from the exe), so their st
+// states go stale. A soldier is far past 200 m from the view and near again inside 190 m (so one at
+// the edge doesn't flicker); a far one that leaves the sample is cleared, so his next life starts near.
+// With no view (the player dead or not spawned) every soldier keeps what he was.
+struct SoldierPos { int id; float x, y, z; };
+class FarTracker {
+public:
+    static constexpr float kFar = 200.0f, kNear = 190.0f;
+    void sample(double t, const float* view, const std::vector<SoldierPos>& soldiers, std::vector<std::string>& lines);
+    void reset() { far_.clear(); }
+
+private:
+    std::set<int> far_;
 };
 
 class PlayerTracker {

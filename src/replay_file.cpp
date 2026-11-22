@@ -30,7 +30,7 @@ void ReplayFile::line(std::string_view s)
 
 void ReplayFile::tick(uint64_t nowMs)
 {
-    if (!file_ || nowMs - lastFlushMs_ < 2000) return;
+    if (!file_ || nowMs - lastFlushMs_ < 1000) return;
     lastFlushMs_ = nowMs;
     flush();
 }

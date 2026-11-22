@@ -1,5 +1,7 @@
 // What changed since the last sample (see replay_track.h).
 #include "replay_track.h"
+#include <cctype>
+#include <cmath>
 #include <cmath>
 #include <set>
 #include "replay_pose.h"
@@ -105,4 +107,88 @@ void PlayerTracker::sample(double t, const std::vector<LivePlayer>& players, std
         changed.push_back(row);
     }
     if (!changed.empty()) lines.push_back(rf::pLine(t, changed));
+}
+
+// ---- replay-recorder-2 (see replay_track.h) ----------------------------------------------------
+
+void ProjectileTracker::sample(double t, const std::vector<LiveProjectile>& flights, std::vector<std::string>& lines)
+{
+    std::set<int> seen;
+    std::vector<rf::ProjRow> rows;
+    for (const LiveProjectile& p : flights) {
+        if (!seen.insert(p.key).second) continue;
+        if (!flying_.count(p.key)) {
+            if (flying_.size() >= 1024) { seen.erase(p.key); continue; }
+            flying_.insert(p.key);
+            lines.push_back(rf::pnLine(t, p.key, p.tmpl));
+        }
+        if (std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z)) rows.push_back({ p.key, p.x, p.y, p.z });
+    }
+    if (!rows.empty()) lines.push_back(rf::pjLine(t, rows));
+    std::vector<int> gone;
+    for (int k : flying_)
+        if (!seen.count(k)) gone.push_back(k);
+    for (int k : gone) flying_.erase(k);
+    if (!gone.empty()) lines.push_back(rf::pdLine(t, gone));
+}
+
+namespace {
+
+// A NUL-terminated string at payload+at, at most `len` bytes and never past n.
+std::string payloadStr(const uint8_t* p, size_t n, size_t at, size_t len)
+{
+    std::string s;
+    for (size_t i = at; i < at + len && i < n && p[i]; ++i) s += (char)p[i];
+    return s;
+}
+
+}  // namespace
+
+void InfoTracker::onEvent(int type, const uint8_t* payload, size_t n)
+{
+    if (type == 0x1b) {
+        server_ = payloadStr(payload, n, 0, 32);
+    } else if (type == 0x36) {
+        // "BfVietnam/levels/operation_hastings/" -> "operation_hastings"; "Conquest.con" -> "conquest"
+        std::string path = payloadStr(payload, n, 0, 64), mode = payloadStr(payload, n, 64, 64);
+        while (!path.empty() && (path.back() == '/' || path.back() == '\\')) path.pop_back();
+        size_t slash = path.find_last_of("/\\");
+        level_ = slash == std::string::npos ? path : path.substr(slash + 1);
+        for (auto& c : mode) c = (char)std::tolower((unsigned char)c);
+        if (mode.size() > 4 && mode.compare(mode.size() - 4, 4, ".con") == 0) mode.resize(mode.size() - 4);
+        mode_ = mode;
+    }
+}
+
+void InfoTracker::sample(double t, const std::string& player, std::vector<std::string>& lines)
+{
+    if (level_.empty() || player.empty()) return;
+    std::string line = rf::infoLine(t, server_, level_, mode_, player);
+    std::string key = line.substr(line.find(",\"server\""));   // the line without its time
+    if (key == written_) return;
+    written_ = key;
+    lines.push_back(line);
+}
+
+void FarTracker::sample(double t, const float* view, const std::vector<SoldierPos>& soldiers, std::vector<std::string>& lines)
+{
+    std::map<int, bool> changed;
+    std::set<int> seen;
+    for (const SoldierPos& s : soldiers) {
+        seen.insert(s.id);
+        if (!view || !std::isfinite(s.x) || !std::isfinite(s.y) || !std::isfinite(s.z)) continue;
+        const float dx = s.x - view[0], dy = s.y - view[1], dz = s.z - view[2];
+        const float d2 = dx * dx + dy * dy + dz * dz;
+        const bool was = far_.count(s.id) != 0;
+        if (!was && d2 > kFar * kFar) { far_.insert(s.id); changed[s.id] = true; }
+        else if (was && d2 < kNear * kNear) { far_.erase(s.id); changed[s.id] = false; }
+    }
+    std::vector<int> gone;
+    for (int id : far_)
+        if (!seen.count(id)) gone.push_back(id);
+    for (int id : gone) { far_.erase(id); changed[id] = false; }
+    if (changed.empty()) return;
+    std::vector<rf::FarRow> rows;
+    for (const auto& c : changed) rows.push_back({ c.first, c.second });
+    lines.push_back(rf::farLine(t, rows));
 }

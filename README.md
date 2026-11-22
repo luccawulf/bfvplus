@@ -120,8 +120,9 @@ sampleHz      = 30   ; soldier and vehicle samples per second, 1-30
 ```
 
 - **One file per join:** `replays\replay_<date>-<time>.ndjson` next to `BfVietnam.exe`, in BF42++'s
-  replay format (version 5, marked `"game":"bfv"`). It is written to disk every 2 s, so a crash
-  loses at most 2 s, and it is closed with an `end` record when you leave or quit.
+  replay format (version 5, marked `"game":"bfv"`). It is written to disk every second, so a game
+  crash loses at most about a second, and it is closed with an `end` record when you leave or quit.
+  A file a crash cut short has no `end` record and still plays, to its last record.
 - **What it holds:**
   - every game event the server sends (players joining and leaving, teams, vehicles entered and
     left, kills and scores, objects made and destroyed, the level and rules), in the same form as
@@ -132,12 +133,19 @@ sampleHz      = 30   ; soldier and vehicle samples per second, 1-30
     moving parts, engines, soldiers' animation states, aim and held weapon, and the animation table
   - every round fired that your client sees, each with its muzzle and direction, yours marked
   - the tickets, the control points' owners, the vehicle radios' songs, and your hit marks
+  - an `info` record with the server's name, the level, the game mode and your own name, for the
+    website's replay list (again if the level changes on the same server)
+  - every rocket, bomb and missile in flight that your client flies (the SA-7 included), placed each
+    sample, in the server recorder's `pn`/`pj`/`pd` rows
+  - which soldiers are beyond about 200 m from you (`far` rows), whose recorded states are stale
 - **Read-only:** it reads what your game already holds. To see each round fired, it watches the six
   places the game fires a barrel (the round itself is untouched). It sends nothing and changes nothing
   about gameplay, input or network traffic.
 - **Your view of the round:** a client only hears about what the server sends it. Far-away
   players update less often, and fast aircraft are shown as your client extrapolated them. Your client
-  also stops animating soldiers beyond about 200 m, so their recorded states can lag behind.
+  also stops animating soldiers beyond about 200 m, so their recorded states can lag behind; the
+  `far` rows mark them and the viewer poses them from their movement instead. The bots' AI level of
+  detail (the server recorder's `lod`) lives only on the server, so a client file has none.
 - If BFV is installed under `Program Files`, Windows may keep the files in
   `%LOCALAPPDATA%\VirtualStore\Program Files\...\replays` instead (it redirects writes into
   protected folders).

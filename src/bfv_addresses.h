@@ -48,6 +48,7 @@ VTABLE(VT_FireArms, 0x00B9164C, "RTTI FireArms@world@ref2@dice (+0x84 0x00B91630
 VTABLE(VT_HandFireArms, 0x00B9D97C, "RTTI HandFireArms@world@ref2@dice (+0x84, +0x160, +0x368 subobjects)")
 VTABLE(VT_RotationalBundle, 0x00BA45FC, "RTTI RotationalBundle@world@ref2@dice (+0x84: 0x00BA45E0)")
 VTABLE(VT_MusicPlayer, 0x00B90654, "RTTI MusicPlayer@world@ref2@dice (+0x84: 0x00B90638)")
+VTABLE(VT_Projectile, 0x00B92294, "RTTI Projectile@world@ref2@dice (+0x84: 0x00B9227C); exact, as the server's vt_projectile")
 
 // ---- the replay recorder's reads (Session A on the lab, 2026-11-06; evidence in the viewer repo's
 //      features/bfv-client-recorder/session-a.md) ------------------------------------------------
@@ -62,6 +63,7 @@ inline constexpr uintptr_t LIST_NEXT = 0x00, LIST_OBJECT = 0x0C;
 // An object (Object; PlayerControlObject and BFSoldier alike). Matches the server's
 // target_bfv_linded.c up to +0x6C; the absolute transform is 4 bytes later than the server's.
 inline constexpr uintptr_t OBJ_FLAGS = 0x04;     // 0x8000 root; 0x40000 cached transform is stale
+inline constexpr uint32_t OBJ_FLAG_DISABLED = 1; // bit 0, as the server's FLAG_DISABLED and BF42++'s walk: a pooled round between flights
 inline constexpr uintptr_t OBJ_ID = 0x48;        // the object manager's id (BF42++'s "gid")
 inline constexpr uintptr_t OBJ_TEMPLATE = 0x4C;  // -> template; its name is an MSVC string at +0x0C
 inline constexpr uintptr_t OBJ_PARENT = 0x50;    // null for a root

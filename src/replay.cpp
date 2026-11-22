@@ -3,9 +3,10 @@
 // - replay_onEvent (the readEvent hook): the event's type, the session's join/connection rules, then
 //   the event's record from its payload (ev+12).
 // - replay_onInputPoll (the mouse hook, many times a second on the game thread): the 30 s silent end,
-//   the 2 s flush, and on each due sample the players, then the soldiers and vehicles with their armour,
+//   the 1 s flush, and on each due sample the players, then the soldiers and vehicles with their armour,
 //   parts, engines, states and radios, the control points, the tickets and the player's hit mark
-//   (stages 2-3, plan-1b; Session D's offsets).
+//   (stages 2-3, plan-1b; Session D's offsets); replay-recorder-2 adds the info labels, the rounds in
+//   flight (pn/pj/pd, Projectile vtable 0x00B92294) and the far soldiers.
 // - The event hook takes a due sample too, for the spawn screen, where the game stops polling the
 //   mouse but the server's events keep coming.
 // - replay_onFire (fire_hook.cpp, every round fireBarrel fires) queues the round; both hooks above write
@@ -20,6 +21,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include "bfv_addresses.h"
 #include "plus_log.h"
@@ -49,6 +51,10 @@ SoldierTracker g_soldiers;
 HitMarkTracker g_hits;
 MusicTracker g_music;
 ShotQueue g_shots;
+// replay-recorder-2: the run's labels, rounds in flight, soldiers past the client's animation range.
+InfoTracker g_info;
+ProjectileTracker g_proj;
+FarTracker g_far;
 std::atomic<bool> g_live{ false };          // a file is open: the fire hook queues rounds
 std::atomic<uintptr_t> g_localBF{ 0 };      // the recording player's BFPlayer, for a shot's `local`
 std::string g_path;
@@ -105,6 +111,9 @@ void noticeNewFile()
     g_hits.reset();
     g_music.reset();
     g_shots.clear();
+    g_info.reset();
+    g_proj.reset();
+    g_far.reset();
     g_localBF = 0;
     g_events.reset(new EventDecoder(templateNameById));
     templateCacheReset();
@@ -187,6 +196,7 @@ void replay_onEvent(void* ev)
     }
     std::string line;
     if (g_events->line((int)type, payload, n, g_session->t(now), line)) g_session->write(line);
+    g_info.onEvent((int)type, payload, n);   // serverName, setLevel: the info line's labels
     // The game stops polling the mouse on the spawn screen (Session C: 23 s with no samples while
     // bots moved), but the server's events keep coming on the same thread: take a due sample here too.
     sampleIfDue(now);
@@ -213,6 +223,10 @@ static void sampleIfDue(uint64_t now)
     std::vector<LivePlayer> players;
     readPlayers(players);
     g_players.sample(t, players, lines);
+    const LivePlayer* me = nullptr;
+    for (const auto& p : players)
+        if (p.local) me = &p;
+    g_info.sample(t, me ? me->name : std::string(), lines);
     std::vector<LiveObject> objects;
     ReadStats st;
     DetailRead detail;
@@ -226,6 +240,21 @@ static void sampleIfDue(uint64_t now)
         g_soldiers.sample(t, detail.soldiers, tableRead ? &table : nullptr, lines);   // anim once, st
         g_cps.sample(t, detail.cps, lines);
         g_music.sample(t, detail.music, lines);
+        g_proj.sample(t, detail.projectiles, lines);   // pn, pj, pd
+        // far: each soldier's distance from the player's own soldier or vehicle (none while he is dead)
+        std::unordered_map<int, const LiveObject*> byNet;
+        for (const auto& o : objects) byNet[o.netId] = &o;
+        const float* view = nullptr;
+        if (me) {
+            auto it = byNet.find(me->rootNetId);
+            if (it != byNet.end()) view = &it->second->rows[12];
+        }
+        std::vector<SoldierPos> soldierPos;
+        for (const auto& s : detail.soldiers) {
+            auto it = byNet.find(s.netId);
+            if (it != byNet.end()) soldierPos.push_back({ s.netId, it->second->rows[12], it->second->rows[13], it->second->rows[14] });
+        }
+        g_far.sample(t, view, soldierPos, lines);
     } else if (!g_loggedListFail) {
         g_loggedListFail = true;
         plusLog("replay: the object list can't be read; recording events and players only");

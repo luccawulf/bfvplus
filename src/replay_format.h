@@ -66,4 +66,23 @@ std::string animSkippedLine(double t, size_t count, size_t limit);
 // A vehicle radio's song event; action "set", "play" or "stop".
 std::string songLine(double t, const char* action, int rootId, int song, int group, float left);
 
+// ---- replay-recorder-2 -------------------------------------------------------------------------
+
+// Rounds in flight, as the BFV server recorder writes them (core.c sample_projectile and
+// projectiles_gone): `pn` names a flight as it starts, `pj` places every flight once a sample, `pd`
+// ends the flights a sample no longer finds. A flight's key is the object manager's id (obj+0x48),
+// the server's map key: a pooled round keeps it from flight to flight.
+std::string pnLine(double t, int key, std::string_view tmpl);
+struct ProjRow { int key; float x, y, z; };
+std::string pjLine(double t, const std::vector<ProjRow>& rows);
+std::string pdLine(double t, const std::vector<int>& keys);
+// The recording's labels for the website's replay list: the server's name, the level, the game mode
+// ("conquest", "coop", ...) and the recording player's own name.
+std::string infoLine(double t, std::string_view server, std::string_view level, std::string_view mode,
+    std::string_view player);
+// Soldiers beyond the client's animation range (1) or back inside it (0): their `st` states are stale
+// while 1, and the viewer poses them from their movement instead.
+struct FarRow { int id; bool isFar; };   // not `far`: windows.h defines it away
+std::string farLine(double t, const std::vector<FarRow>& rows);
+
 }  // namespace rf

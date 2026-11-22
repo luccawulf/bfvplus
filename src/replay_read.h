@@ -20,6 +20,7 @@ struct DetailRead {
     std::vector<LiveEngine> engines;
     std::vector<LiveMusic> music;
     std::vector<LiveControlPoint> cps;
+    std::vector<LiveProjectile> projectiles;   // replay-recorder-2: rounds in flight
 };
 
 // Every root soldier and vehicle in the object manager with a net id and a real position (pooled

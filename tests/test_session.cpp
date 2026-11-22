@@ -57,17 +57,23 @@ static SessionConfig cfg(const std::string& dir, bool enabled = true, int hz = 1
     return SessionConfig{ enabled, hz, dir, "0.3-dev", "bfvietnam", "Nov  6 2026 21:30:00" };
 }
 
-TEST(file_buffers_until_2s)
+TEST(file_buffers_until_1s)
 {
+    // replay-recorder-2: flushed once a second, so a crash loses at most ~1 s.
     std::string dir = tempDir(), path = dir + "/x.ndjson";
     ReplayFile f;
     CHECK(f.open(path));
     f.line("a");
     f.line("b");
-    f.tick(1999);
+    f.tick(999);
     CHECK_EQ(slurp(path), std::string(""));
-    f.tick(2000);
+    f.tick(1000);
     CHECK_EQ(slurp(path), std::string("a\nb\n"));
+    f.line("c");
+    f.tick(1999);
+    CHECK_EQ(slurp(path), std::string("a\nb\n"));
+    f.tick(2000);
+    CHECK_EQ(slurp(path), std::string("a\nb\nc\n"));
     f.close();
 }
 

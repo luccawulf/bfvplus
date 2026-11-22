@@ -247,6 +247,39 @@ std::string songLine(double t, const char* action, int rootId, int song, int gro
         + ",\"song\":" + std::to_string(song) + ",\"group\":" + std::to_string(group) + ",\"left\":" + buf + "}";
 }
 
+std::string pnLine(double t, int key, std::string_view tmpl)
+{
+    return "{\"k\":\"pn\",\"t\":" + t3(t) + ",\"o\":[[" + std::to_string(key) + ",\"" + jsonEscape(tmpl) + "\"]]}";
+}
+
+std::string pjLine(double t, const std::vector<ProjRow>& rows)
+{
+    return batch("pj", "o", t, rows, [](const ProjRow& r) {
+        return "[" + std::to_string(r.key) + f3(",%.2f,%.2f,%.2f]", r.x, r.y, r.z);
+    });
+}
+
+std::string pdLine(double t, const std::vector<int>& keys)
+{
+    std::string out = "{\"k\":\"pd\",\"t\":" + t3(t) + ",\"o\":[";
+    for (size_t i = 0; i < keys.size(); ++i) out += (i ? "," : "") + std::to_string(keys[i]);
+    return out + "]}";
+}
+
+std::string infoLine(double t, std::string_view server, std::string_view level, std::string_view mode,
+    std::string_view player)
+{
+    return "{\"k\":\"info\",\"t\":" + t3(t) + ",\"server\":\"" + jsonEscape(server) + "\",\"level\":\"" + jsonEscape(level)
+        + "\",\"mode\":\"" + jsonEscape(mode) + "\",\"player\":\"" + jsonEscape(player) + "\"}";
+}
+
+std::string farLine(double t, const std::vector<FarRow>& rows)
+{
+    return batch("far", "o", t, rows, [](const FarRow& r) {
+        return "[" + std::to_string(r.id) + (r.isFar ? ",1]" : ",0]");
+    });
+}
+
 std::string rosterLine(double t, const std::vector<RosterRow>& rows)
 {
     std::string out = "{\"k\":\"roster\",\"t\":" + t3(t) + ",\"p\":[";
