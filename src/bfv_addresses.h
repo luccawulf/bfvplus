@@ -149,8 +149,12 @@ inline constexpr uintptr_t CPT_NAME = 0x2AC, STATE_NAME = 0x12C;
 
 // ---- replay-recorder-2: the recording player's view and inputs, static RE on 2026-11-22 (BfVietnam.exe,
 //      the installed copy: its code matches the netcode repo's reference exe at the same addresses except
-//      3,151 patched bytes, none in the functions below; server names from bfv_linded's symbols, a client
-//      slot n being the server's GCC slot n+3 in a primary vtable, checked on each getter's body). ------
+//      3,151 patched bytes. Three patches touch the code below and none changes what is read: PlayerAction::set
+//      0x0051A2FD..0x0051A324 (the thrfire2 mode bits 13 and 26, MOD-033's client half), Camera::setViewMode
+//      0x006A64C1..0x006A64DC (every view allowed: the template's three view bytes read as 1), and the tick
+//      0x005C6E8A (a call after the action is built, redirected into the .ctfsnd section). Server names come
+//      from bfv_linded's symbols, a client slot n being the server's GCC slot n+3 in a primary vtable,
+//      checked on each getter's body). ------
 // The view drawn: the per-view render (0x004A6FA0, called per local player from 0x004A8A87/0x004A8ADD)
 // gets the matrix from the player's camera (ICameraObject slot 4, getTransformation, 0x006A70F0, at
 // 0x004A72CE) and sets it as the absolute transformation of ObjectManager::getCamera()'s object
