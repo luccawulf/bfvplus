@@ -85,3 +85,62 @@ TEST(in_lines_and_tracker)
     tr.sample(1.2, none, l);  // no action buffered (all acked): nothing
     CHECK_EQ(l.size(), (size_t)2);
 }
+
+TEST(in_tracker_takes_every_buffered_record)
+{
+    // Two records between two samples, the first a one-tick previous-view press (bit 19): the newest
+    // alone, the word before it again, lost the press (his live round of 2026-11-22 at 45.739 s; the
+    // server applied it). Each record past the last serial written is taken, a tick before the next.
+    InputTracker tr;
+    std::vector<std::string> l;
+    const LiveInput a{ true, 7, { 2047, 2047, 2047, 2175, 2047, 2047 }, 0 };
+    tr.sample(1, &a, 1, l);
+    CHECK_EQ(l.size(), (size_t)1);
+    LiveInput buf[3] = { a, a, a };   // 7 not acknowledged yet, then 8 and 9
+    buf[1].serial = 8;
+    buf[1].buttons = 1u << 19;
+    buf[2].serial = 9;
+    tr.sample(1.1, buf, 3, l);
+    CHECK_EQ(l.size(), (size_t)3);
+    if (l.size() != 3) return;
+    CHECK_EQ(l[1], std::string("{\"k\":\"in\",\"t\":1.067,\"v\":[2047,2047,2047,2175,2047,2047,524288]}"));
+    CHECK_EQ(l[2], std::string("{\"k\":\"in\",\"t\":1.100,\"v\":[2047,2047,2047,2175,2047,2047,0]}"));
+    tr.sample(1.133, buf, 3, l);      // the same records again: nothing
+    CHECK_EQ(l.size(), (size_t)3);
+}
+
+TEST(in_tracker_keeps_rows_in_time_order)
+{
+    // Records dated a tick apart back from the sample never go before the last row written (two
+    // samples close together); the first sample of a file, and serials that start over (a new join),
+    // take the newest record only, as before.
+    InputTracker tr;
+    std::vector<std::string> l;
+    LiveInput buf[3] = {};
+    for (int i = 0; i < 3; i++) {
+        buf[i] = LiveInput{ true, (uint32_t)(1 + i), { 2048, 2048, 2048, 2048, 2048, 2048 }, (uint32_t)i };
+    }
+    tr.sample(2.0, buf, 3, l);        // the file's first sample: serial 3 only
+    CHECK_EQ(l.size(), (size_t)1);
+    if (l.size() != 1) return;
+    CHECK_EQ(l[0], std::string("{\"k\":\"in\",\"t\":2.000,\"v\":[2048,2048,2048,2048,2048,2048,2]}"));
+    for (int i = 0; i < 3; i++) {
+        buf[i].serial = 4 + i;
+        buf[i].buttons = 4u << i;
+    }
+    tr.sample(2.01, buf, 3, l);       // 1.943 and 1.977 would go before 2.000
+    CHECK_EQ(l.size(), (size_t)4);
+    if (l.size() != 4) return;
+    CHECK_EQ(l[1], std::string("{\"k\":\"in\",\"t\":2.000,\"v\":[2048,2048,2048,2048,2048,2048,4]}"));
+    CHECK_EQ(l[2], std::string("{\"k\":\"in\",\"t\":2.000,\"v\":[2048,2048,2048,2048,2048,2048,8]}"));
+    CHECK_EQ(l[3], std::string("{\"k\":\"in\",\"t\":2.010,\"v\":[2048,2048,2048,2048,2048,2048,16]}"));
+    for (int i = 0; i < 3; i++) buf[i].serial = 1 + i;   // a new join: his serials began again
+    tr.sample(3.0, buf, 3, l);
+    CHECK_EQ(l.size(), (size_t)4);   // its newest word is the last written: nothing
+    buf[2].buttons = 1;
+    buf[2].serial = 4;
+    tr.sample(3.1, buf, 3, l);       // serials 1-3 already past; 4 is new
+    CHECK_EQ(l.size(), (size_t)5);
+    if (l.size() != 5) return;
+    CHECK_EQ(l[4], std::string("{\"k\":\"in\",\"t\":3.100,\"v\":[2048,2048,2048,2048,2048,2048,1]}"));
+}

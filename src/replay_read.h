@@ -50,9 +50,10 @@ int readPlayers(std::vector<LivePlayer>& out);
 bool localPlayerPresent();
 
 // replay-recorder-2: the recording player's drawn view, its field of view and his camera's mode (false
-// when no view is read; objVt the view object's vtable), and his client's newest action word.
+// when no view is read; objVt the view object's vtable), and the action words his client has buffered
+// (the server hasn't acknowledged them yet): the newest `max` at most, oldest first; their count.
 bool readCamera(LiveCam& out, uintptr_t* objVt = nullptr);
-bool readInput(LiveInput& out);
+int readInputs(LiveInput* out, int max);
 
 // Template id -> name from the client's ObjectTemplateManager tree ("" when unknown). The tree is
 // walked again when a lookup misses, at most every 5 s.

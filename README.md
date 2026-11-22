@@ -141,7 +141,8 @@ sampleHz      = 30   ; soldier and vehicle samples per second, 1-30
   - your own view as your game drew it (`cam`: place, turn, field of view, on change) and your camera's
     view mode, camera and vehicle (`camv`), so a replay can show exactly what you saw
   - the action word your client sends each tick (`in`: the six 12-bit axes and the button mask, as
-    the server receives them), on change
+    the server receives them), on change, every tick's word read from your client's buffer, so a key
+    held for one tick between two samples is kept
   - these two were found by reading the game's code only; `tools/check_view.py <file>` compares them
     with your soldier, aim and rounds in the same file
 - **Read-only:** it reads what your game already holds. To see each round fired, it watches the six

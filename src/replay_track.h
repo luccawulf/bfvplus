@@ -115,18 +115,27 @@ private:
     std::string tmpl_;
 };
 
-// The action word of his client's newest tick (item 5): the last entry of his BFPlayer's action
-// buffer, its serial telling one tick from the next. `have` false when the buffer is empty.
+// The action word of his client's ticks (item 5): his BFPlayer's action buffer holds each record the
+// server has not acknowledged yet, oldest first, its serial counting his client's ticks. `have` false
+// for an empty buffer. INPUT_RECORDS: the most read from it at a sample, the newest.
 struct LiveInput { bool have; uint32_t serial; uint16_t axes[6]; uint32_t buttons; };
-// in when a new tick's word differs from the last written; the same word on the next tick is not repeated.
+inline constexpr int INPUT_RECORDS = 64;
+inline constexpr double GAME_TICK = 1.0 / 30;
+// in for each record past the last serial seen whose word differs from the last written (the same
+// word on the next tick is not repeated), so a word that lasted one tick between two samples is kept
+// (the newest alone lost such a press, his live round 2026-11-22). Its time: one game tick per serial
+// before the sample's newest record, never before the last row written. A file's first sample, and
+// serials that start over (a new join), take the newest record only.
 class InputTracker {
 public:
-    void sample(double t, const LiveInput& in, std::vector<std::string>& lines);
+    void sample(double t, const LiveInput& in, std::vector<std::string>& lines) { sample(t, &in, 1, lines); }
+    void sample(double t, const LiveInput* recs, int n, std::vector<std::string>& lines);
     void reset() { have_ = false; }
 
 private:
     bool have_ = false;
     uint32_t serial_ = 0;
+    double lastT_ = 0;
     uint16_t axes_[6] = {};
     uint32_t buttons_ = 0;
 };

@@ -1,6 +1,7 @@
 // The replay recorder's reads of the live game (see replay_read.h).
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <algorithm>
 #include <cmath>
 #include <unordered_map>
 #include "bfv_addresses.h"
@@ -416,25 +417,31 @@ bool readCamera(LiveCam& out, uintptr_t* objVt)
     return true;
 }
 
-bool readInput(LiveInput& out)
+int readInputs(LiveInput* out, int max)
 {
-    out = LiveInput{};
     uintptr_t pm = playerManager(), local = 0;
-    if (!pm || !seh::vcall0(pm, bfv::VSLOT_LOCAL_PLAYER, &local) || !seh::ptrSane(local)) return false;
+    if (!pm || !seh::vcall0(pm, bfv::VSLOT_LOCAL_PLAYER, &local) || !seh::ptrSane(local)) return 0;
     bool ok;
     uintptr_t ab = seh::u32(local + bfv::PLAYER_ACTIONS, &ok);
-    if (!ok || !seh::ptrSane(ab)) return false;
+    if (!ok || !seh::ptrSane(ab)) return 0;
     uintptr_t head = seh::u32(ab + bfv::AB_LIST_HEAD, &ok);
-    if (!ok || !seh::ptrSane(head) || seh::u32(ab + bfv::AB_LIST_SIZE) == 0) return false;
-    uintptr_t last = seh::u32(head + bfv::LIST_NODE_PREV, &ok);
-    if (!ok || !seh::ptrSane(last) || last == head) return false;
-    uint8_t a[0x18];
-    if (!seh::read(last + bfv::LIST_NODE_DATA, a, sizeof(a))) return false;
-    std::memcpy(out.axes, a, sizeof(out.axes));
-    std::memcpy(&out.buttons, a + bfv::ACTION_BUTTONS, 4);
-    std::memcpy(&out.serial, a + bfv::ACTION_SERIAL, 4);
-    out.have = true;
-    return true;
+    if (!ok || !seh::ptrSane(head) || seh::u32(ab + bfv::AB_LIST_SIZE) == 0) return 0;
+    // From the newest (the list's last node) back, at most max; then oldest first.
+    int n = 0;
+    uintptr_t node = seh::u32(head + bfv::LIST_NODE_PREV, &ok);
+    while (n < max && ok && seh::ptrSane(node) && node != head) {
+        uint8_t a[0x18];
+        if (!seh::read(node + bfv::LIST_NODE_DATA, a, sizeof(a))) break;
+        LiveInput& r = out[n++];
+        r = LiveInput{};
+        std::memcpy(r.axes, a, sizeof(r.axes));
+        std::memcpy(&r.buttons, a + bfv::ACTION_BUTTONS, 4);
+        std::memcpy(&r.serial, a + bfv::ACTION_SERIAL, 4);
+        r.have = true;
+        node = seh::u32(node + bfv::LIST_NODE_PREV, &ok);
+    }
+    std::reverse(out, out + n);
+    return n;
 }
 
 bool localPlayerPresent()

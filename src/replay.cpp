@@ -285,8 +285,9 @@ static void sampleIfDue(uint64_t now)
                 cam.haveFov ? "read" : "not read", cam.fov, cam.mode, cam.camTmpl.c_str(), cam.root);
         }
     }
-    LiveInput input;
-    if (readInput(input)) g_input.sample(t, input, lines);
+    static LiveInput inputs[INPUT_RECORDS];
+    const int ni = readInputs(inputs, INPUT_RECORDS);
+    if (ni > 0) g_input.sample(t, inputs, ni, lines);
     for (const auto& l : lines) g_session->write(l);
     if (!g_loggedDrops && g_shots.dropped()) {
         g_loggedDrops = true;

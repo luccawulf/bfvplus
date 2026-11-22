@@ -228,14 +228,24 @@ void CamTracker::sample(double t, const LiveCam& c, std::vector<std::string>& li
     lines.push_back(rf::camLine(t, row));
 }
 
-void InputTracker::sample(double t, const LiveInput& in, std::vector<std::string>& lines)
+void InputTracker::sample(double t, const LiveInput* recs, int n, std::vector<std::string>& lines)
 {
-    if (!in.have || (have_ && in.serial == serial_)) return;
-    const bool same = have_ && in.buttons == buttons_ && std::equal(in.axes, in.axes + 6, axes_);
-    have_ = true;
-    serial_ = in.serial;
-    if (same) return;
-    std::copy(in.axes, in.axes + 6, axes_);
-    buttons_ = in.buttons;
-    lines.push_back(rf::inLine(t, std::vector<int>(in.axes, in.axes + 6), in.buttons));
+    if (n <= 0 || !recs[n - 1].have) return;
+    const uint32_t newest = recs[n - 1].serial;
+    if (have_ && newest == serial_) return;
+    const bool again = !have_ || newest < serial_;
+    for (int i = again ? n - 1 : 0; i < n; i++) {
+        const LiveInput& r = recs[i];
+        if (!r.have || (!again && r.serial <= serial_)) continue;
+        const bool same = have_ && r.buttons == buttons_ && std::equal(r.axes, r.axes + 6, axes_);
+        double at = t - (double)(newest - r.serial) * GAME_TICK;
+        if (have_ && at < lastT_) at = lastT_;
+        have_ = true;
+        if (same) continue;
+        std::copy(r.axes, r.axes + 6, axes_);
+        buttons_ = r.buttons;
+        lastT_ = at;
+        lines.push_back(rf::inLine(at, std::vector<int>(r.axes, r.axes + 6), r.buttons));
+    }
+    serial_ = newest;
 }
