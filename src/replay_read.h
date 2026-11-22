@@ -49,6 +49,11 @@ int readPlayers(std::vector<LivePlayer>& out);
 
 bool localPlayerPresent();
 
+// replay-recorder-2: the recording player's drawn view, its field of view and his camera's mode (false
+// when no view is read; objVt the view object's vtable), and his client's newest action word.
+bool readCamera(LiveCam& out, uintptr_t* objVt = nullptr);
+bool readInput(LiveInput& out);
+
 // Template id -> name from the client's ObjectTemplateManager tree ("" when unknown). The tree is
 // walked again when a lookup misses, at most every 5 s.
 std::string templateNameById(uint32_t id);

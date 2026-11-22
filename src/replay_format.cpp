@@ -280,6 +280,28 @@ std::string farLine(double t, const std::vector<FarRow>& rows)
     });
 }
 
+std::string camLine(double t, const CamRow& c)
+{
+    char buf[192];
+    char fov[24] = "null";
+    if (c.haveFov) std::snprintf(fov, sizeof(fov), "%.3f", c.fov);
+    std::snprintf(buf, sizeof(buf), "[%.2f,%.2f,%.2f,%.3f,%.3f,%.3f,%.3f,%s]", c.x, c.y, c.z, c.qx, c.qy, c.qz, c.qw, fov);
+    return "{\"k\":\"cam\",\"t\":" + t3(t) + ",\"o\":" + buf + "}";
+}
+
+std::string camvLine(double t, int mode, std::string_view camTmpl, int root)
+{
+    return "{\"k\":\"camv\",\"t\":" + t3(t) + ",\"mode\":" + std::to_string(mode) + ",\"cam\":\"" + jsonEscape(camTmpl)
+        + "\",\"root\":" + std::to_string(root) + "}";
+}
+
+std::string inLine(double t, const std::vector<int>& axes, uint32_t buttons)
+{
+    std::string out = "{\"k\":\"in\",\"t\":" + t3(t) + ",\"v\":[";
+    for (int a : axes) out += std::to_string(a) + ",";
+    return out + std::to_string(buttons) + "]}";
+}
+
 std::string rosterLine(double t, const std::vector<RosterRow>& rows)
 {
     std::string out = "{\"k\":\"roster\",\"t\":" + t3(t) + ",\"p\":[";

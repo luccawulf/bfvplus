@@ -386,6 +386,57 @@ int readPlayers(std::vector<LivePlayer>& out)
     return (int)out.size();
 }
 
+// replay-recorder-2: the recording player's view (offsets in bfv_addresses.h). `objVt` gets the view
+// object's vtable for the status log.
+bool readCamera(LiveCam& out, uintptr_t* objVt)
+{
+    out = LiveCam{};
+    bool ok;
+    uintptr_t mgr = seh::u32(bfv::OBJMGR_GLOBAL, &ok);
+    if (!ok || !seh::ptrSane(mgr)) return false;
+    uintptr_t view = seh::u32(mgr + bfv::OBJMGR_VIEW_CAMERA, &ok);
+    if (!ok || !seh::ptrSane(view) || seh::u32(view + bfv::OBJ_PARENT)) return false;   // made at the first frame drawn; a root
+    if (objVt) *objVt = seh::u32(view);
+    if (!seh::read(view + bfv::OBJ_ROWS, out.rows, sizeof(out.rows))) return false;
+    out.have = true;
+    uintptr_t pm = playerManager(), local = 0;
+    if (!pm || !seh::vcall0(pm, bfv::VSLOT_LOCAL_PLAYER, &local) || !seh::ptrSane(local)) local = 0;
+    uintptr_t rv = local ? seh::u32(local + bfv::PLAYER_RENDER_VIEW) : 0;
+    if (!seh::ptrSane(rv) || seh::u32(rv) != VT_RenderView.va) rv = seh::u32(bfv::RENDERVIEW_GLOBAL);
+    if (seh::ptrSane(rv) && seh::u32(rv) == VT_RenderView.va) out.haveFov = seh::read(rv + bfv::RV_FOV, &out.fov, sizeof(out.fov));
+    uintptr_t ci = local ? seh::u32(local + bfv::PLAYER_CAMERA) : 0;
+    if (seh::ptrSane(ci) && seh::u32(ci) == VT_Camera_ICameraObject.va) {
+        out.mode = (int)seh::u32(ci + bfv::CAMI_VIEW_MODE, &ok);
+        out.haveMode = ok;
+        const uintptr_t cam = ci - bfv::CAM_ICAMERA;
+        uintptr_t tmpl = seh::u32(cam + bfv::OBJ_TEMPLATE);
+        out.camTmpl = seh::ptrSane(tmpl) ? templateName(tmpl) : std::string();
+        out.root = netIdOf(rootOf(cam));
+    }
+    return true;
+}
+
+bool readInput(LiveInput& out)
+{
+    out = LiveInput{};
+    uintptr_t pm = playerManager(), local = 0;
+    if (!pm || !seh::vcall0(pm, bfv::VSLOT_LOCAL_PLAYER, &local) || !seh::ptrSane(local)) return false;
+    bool ok;
+    uintptr_t ab = seh::u32(local + bfv::PLAYER_ACTIONS, &ok);
+    if (!ok || !seh::ptrSane(ab)) return false;
+    uintptr_t head = seh::u32(ab + bfv::AB_LIST_HEAD, &ok);
+    if (!ok || !seh::ptrSane(head) || seh::u32(ab + bfv::AB_LIST_SIZE) == 0) return false;
+    uintptr_t last = seh::u32(head + bfv::LIST_NODE_PREV, &ok);
+    if (!ok || !seh::ptrSane(last) || last == head) return false;
+    uint8_t a[0x18];
+    if (!seh::read(last + bfv::LIST_NODE_DATA, a, sizeof(a))) return false;
+    std::memcpy(out.axes, a, sizeof(out.axes));
+    std::memcpy(&out.buttons, a + bfv::ACTION_BUTTONS, 4);
+    std::memcpy(&out.serial, a + bfv::ACTION_SERIAL, 4);
+    out.have = true;
+    return true;
+}
+
 bool localPlayerPresent()
 {
     uintptr_t pm = playerManager();

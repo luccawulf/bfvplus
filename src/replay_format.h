@@ -84,5 +84,14 @@ std::string infoLine(double t, std::string_view server, std::string_view level, 
 // while 1, and the viewer poses them from their movement instead.
 struct FarRow { int id; bool isFar; };   // not `far`: windows.h defines it away
 std::string farLine(double t, const std::vector<FarRow>& rows);
+// The recording player's view as his client drew it: `cam` the place (2 decimals), the turn as an `s`
+// row's quaternion (3 decimals) and the field of view in radians (3 decimals, null when not read);
+// `camv` the camera's view mode, its template and the root it hangs under, on change.
+struct CamRow { float x, y, z, qx, qy, qz, qw, fov; bool haveFov; };
+std::string camLine(double t, const CamRow& c);
+std::string camvLine(double t, int mode, std::string_view camTmpl, int root);
+// The action word his client sent for a tick (PlayerAction, 0x00519DC0): the six 12-bit axes (yaw,
+// pitch, roll, throttle, mouse look x, y) and the 32-bit button mask, as the server receives them.
+std::string inLine(double t, const std::vector<int>& axes, uint32_t buttons);
 
 }  // namespace rf

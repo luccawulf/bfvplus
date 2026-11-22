@@ -1,9 +1,9 @@
 // What changed since the last sample (see replay_track.h).
 #include "replay_track.h"
+#include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
-#include <cmath>
 #include <set>
 #include "replay_pose.h"
 
@@ -200,4 +200,42 @@ void FarTracker::sample(double t, const float* view, const std::vector<SoldierPo
     std::vector<rf::FarRow> rows;
     for (const auto& c : changed) rows.push_back({ c.first, c.second });
     lines.push_back(rf::farLine(t, rows));
+}
+
+void CamTracker::sample(double t, const LiveCam& c, std::vector<std::string>& lines)
+{
+    if (!c.have) return;
+    const rf::Pose p = poseFromBody(0, c.rows);
+    if (!rf::finitePose(p) || (c.haveFov && !std::isfinite(c.fov))) return;
+    if (c.haveMode && (!haveV_ || c.mode != mode_ || c.camTmpl != tmpl_ || c.root != root_)) {
+        haveV_ = true;
+        mode_ = c.mode;
+        tmpl_ = c.camTmpl;
+        root_ = c.root;
+        lines.push_back(rf::camvLine(t, mode_, tmpl_, root_));
+    }
+    const rf::CamRow row{ p.x, p.y, p.z, p.qx, p.qy, p.qz, p.qw, c.fov, c.haveFov };
+    if (haveCam_) {
+        const float dx = row.x - last_.x, dy = row.y - last_.y, dz = row.z - last_.z;
+        const bool moved = dx * dx + dy * dy + dz * dz > 0.01f * 0.01f;
+        const bool turned = std::fabs(row.qx - last_.qx) > 0.002f || std::fabs(row.qy - last_.qy) > 0.002f
+            || std::fabs(row.qz - last_.qz) > 0.002f || std::fabs(row.qw - last_.qw) > 0.002f;
+        const bool lens = row.haveFov != last_.haveFov || (row.haveFov && std::fabs(row.fov - last_.fov) > 0.001f);
+        if (!moved && !turned && !lens) return;
+    }
+    haveCam_ = true;
+    last_ = row;
+    lines.push_back(rf::camLine(t, row));
+}
+
+void InputTracker::sample(double t, const LiveInput& in, std::vector<std::string>& lines)
+{
+    if (!in.have || (have_ && in.serial == serial_)) return;
+    const bool same = have_ && in.buttons == buttons_ && std::equal(in.axes, in.axes + 6, axes_);
+    have_ = true;
+    serial_ = in.serial;
+    if (same) return;
+    std::copy(in.axes, in.axes + 6, axes_);
+    buttons_ = in.buttons;
+    lines.push_back(rf::inLine(t, std::vector<int>(in.axes, in.axes + 6), in.buttons));
 }

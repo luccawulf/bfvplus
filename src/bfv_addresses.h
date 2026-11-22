@@ -49,6 +49,8 @@ VTABLE(VT_HandFireArms, 0x00B9D97C, "RTTI HandFireArms@world@ref2@dice (+0x84, +
 VTABLE(VT_RotationalBundle, 0x00BA45FC, "RTTI RotationalBundle@world@ref2@dice (+0x84: 0x00BA45E0)")
 VTABLE(VT_MusicPlayer, 0x00B90654, "RTTI MusicPlayer@world@ref2@dice (+0x84: 0x00B90638)")
 VTABLE(VT_Projectile, 0x00B92294, "RTTI Projectile@world@ref2@dice (+0x84: 0x00B9227C); exact, as the server's vt_projectile")
+VTABLE(VT_Camera_ICameraObject, 0x00B95674, "RTTI Camera@world@ref2@dice, its ICameraObject subobject at +0x1A0 (primary 0x00B956EC)")
+VTABLE(VT_RenderView, 0x00C01F8C, "RTTI RenderView@rend@ref2@dice, subobject +0x0")
 
 // ---- the replay recorder's reads (Session A on the lab, 2026-11-06; evidence in the viewer repo's
 //      features/bfv-client-recorder/session-a.md) ------------------------------------------------
@@ -144,4 +146,37 @@ inline constexpr uintptr_t PLAYER_HITMARK = 0x1EC;
 // Names, Session D: a control point's name is an MSVC string at +0x2AC of its template (355 of 355), an
 // AnimationState's name an MSVC string at +0x12C of the state (3,328 of 3,328).
 inline constexpr uintptr_t CPT_NAME = 0x2AC, STATE_NAME = 0x12C;
+
+// ---- replay-recorder-2: the recording player's view and inputs, static RE on 2026-11-22 (BfVietnam.exe,
+//      the installed copy: its code matches the netcode repo's reference exe at the same addresses except
+//      3,151 patched bytes, none in the functions below; server names from bfv_linded's symbols, a client
+//      slot n being the server's GCC slot n+3 in a primary vtable, checked on each getter's body). ------
+// The view drawn: the per-view render (0x004A6FA0, called per local player from 0x004A8A87/0x004A8ADD)
+// gets the matrix from the player's camera (ICameraObject slot 4, getTransformation, 0x006A70F0, at
+// 0x004A72CE) and sets it as the absolute transformation of ObjectManager::getCamera()'s object
+// (0x004A740B..0x004A742E). That getter (ObjectManager vtable slot 29, 0x0066ECD0) caches the object it
+// made from the "ObjectManagerCamera" template at mgr+0x18C; a root, so setAbsoluteTransformation
+// (0x00684CF0) copies the matrix straight to obj+0x94 (0x00684DD0). Same rows as an object's pose.
+inline constexpr uintptr_t OBJMGR_VIEW_CAMERA = 0x18C;
+// The field of view: the same render stores the player's +0xA0 (his IRenderView) in the global
+// 0x00E16ADC (0x004A6FA4..0x004A6FB4) and sets that view's transformation to the matrix (slot 23,
+// 0x00A36D50, at 0x004A745D); RenderView::getFieldOfView (slot 7, 0x00956130) is the float at +0x24
+// (radians: setFieldOfView 0x00A36AE0 halves it for the tangent). The global is restored to its
+// previous value after the views are drawn (0x004A8BEA, 0x004A8D4A), so the player's own is read first.
+inline constexpr uintptr_t PLAYER_RENDER_VIEW = 0xA0, RENDERVIEW_GLOBAL = 0x00E16ADC, RV_FOV = 0x24;
+// His camera: BFPlayer::getCamera (slot 13, 0x0070A3B0) returns the ICameraObject at +0x74 (setCamera,
+// slot 25, 0x00726600). A Camera's ICameraObject is its +0x1A0 subobject (RTTI); getViewMode (slot 6)
+// is the shared getter 0x00A5CB30 returning +0x8 of it (the server's Camera +0x188); getCameraId (slot
+// 13, 0x006A54A0) reads the template at -0x154 = the object's +0x4C, as OBJ_TEMPLATE. toggleViewMode
+// (server 0x0877D4F0) cycles the modes 0..19.
+inline constexpr uintptr_t PLAYER_CAMERA = 0x74, CAM_ICAMERA = 0x1A0, CAMI_VIEW_MODE = 0x8;
+// His inputs: each tick GameClient (0x005C6DEF) builds his PlayerAction from his PlayerInput
+// (PlayerAction::set 0x00519DC0: six u16 12-bit axes at +0, the button mask at +0xC, as the wire's
+// 104-bit record), and storeAndSendPlayerAction (0x00522F30) appends it to his BFPlayer's action buffer
+// (ActionBuffer::add 0x005AC130, which stamps the serial at +0x14) before queueing it to send. The buffer
+// is at BFPlayer+0x1A0 (the BFPlayer constructor, 0x0050377C/0x00503788): an MSVC std::list of 0x18-byte
+// actions, head node pointer at +0x4 and size at +0x8 (node {next, prev, action at +0x8}); the newest is
+// the head's prev. Acknowledged actions leave the list, so it can be empty between ticks.
+inline constexpr uintptr_t PLAYER_ACTIONS = 0x1A0, AB_LIST_HEAD = 0x4, AB_LIST_SIZE = 0x8, LIST_NODE_PREV = 0x4,
+    LIST_NODE_DATA = 0x8, ACTION_BUTTONS = 0xC, ACTION_SERIAL = 0x14;
 }  // namespace bfv

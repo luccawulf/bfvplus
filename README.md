@@ -138,6 +138,12 @@ sampleHz      = 30   ; soldier and vehicle samples per second, 1-30
   - every rocket, bomb and missile in flight that your client flies (the SA-7 included), placed each
     sample, in the server recorder's `pn`/`pj`/`pd` rows
   - which soldiers are beyond about 200 m from you (`far` rows), whose recorded states are stale
+  - your own view as your game drew it (`cam`: place, turn, field of view, on change) and your camera's
+    view mode, camera and vehicle (`camv`), so a replay can show exactly what you saw
+  - the action word your client sends each tick (`in`: the six 12-bit axes and the button mask, as
+    the server receives them), on change
+  - these two were found by reading the game's code only; `tools/check_view.py <file>` compares them
+    with your soldier, aim and rounds in the same file
 - **Read-only:** it reads what your game already holds. To see each round fired, it watches the six
   places the game fires a barrel (the round itself is untouched). It sends nothing and changes nothing
   about gameplay, input or network traffic.

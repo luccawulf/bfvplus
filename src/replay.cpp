@@ -55,6 +55,9 @@ ShotQueue g_shots;
 InfoTracker g_info;
 ProjectileTracker g_proj;
 FarTracker g_far;
+CamTracker g_cam;      // item 4: his view
+InputTracker g_input;  // item 5: his action word
+bool g_loggedCam = false;
 std::atomic<bool> g_live{ false };          // a file is open: the fire hook queues rounds
 std::atomic<uintptr_t> g_localBF{ 0 };      // the recording player's BFPlayer, for a shot's `local`
 std::string g_path;
@@ -114,6 +117,9 @@ void noticeNewFile()
     g_info.reset();
     g_proj.reset();
     g_far.reset();
+    g_cam.reset();
+    g_input.reset();
+    g_loggedCam = false;
     g_localBF = 0;
     g_events.reset(new EventDecoder(templateNameById));
     templateCacheReset();
@@ -268,6 +274,19 @@ static void sampleIfDue(uint64_t now)
     const bool haveMark = readHitMark(mark, pid, bf);
     g_localBF = bf;
     g_hits.sample(t, pid, haveMark, mark, lines);
+    LiveCam cam;
+    uintptr_t camVt = 0;
+    if (readCamera(cam, &camVt)) {
+        g_cam.sample(t, cam, lines);
+        // Once a file: what the view reads found, to check them against the soldier in a lab file.
+        if (!g_loggedCam && cam.haveMode) {
+            g_loggedCam = true;
+            plusLog("replay: view: object vtable %08X, fov %s %.3f, mode %d, camera %s, root %d", (unsigned)camVt,
+                cam.haveFov ? "read" : "not read", cam.fov, cam.mode, cam.camTmpl.c_str(), cam.root);
+        }
+    }
+    LiveInput input;
+    if (readInput(input)) g_input.sample(t, input, lines);
     for (const auto& l : lines) g_session->write(l);
     if (!g_loggedDrops && g_shots.dropped()) {
         g_loggedDrops = true;

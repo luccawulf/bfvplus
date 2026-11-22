@@ -87,6 +87,50 @@ private:
     std::set<int> far_;
 };
 
+// The recording player's view (item 4): the view matrix his client last drew (16 floats in the object
+// rows' layout), its field of view, and his camera's view mode, template and root (see replay_read.cpp
+// readCamera). `have` false when the view wasn't read; haveFov / haveMode when those were.
+struct LiveCam {
+    bool have = false;
+    float rows[16] = {};
+    bool haveFov = false;
+    float fov = 0;
+    bool haveMode = false;
+    int mode = -1;
+    std::string camTmpl;
+    int root = -1;
+};
+// cam when the view moves over 0.01 m, a quaternion component over 0.002 or the field of view over
+// 0.001 rad (an `s` row's thresholds); camv when the mode, the camera or its root changes. A sample
+// with no view, or a view that isn't numbers, writes nothing and changes nothing.
+class CamTracker {
+public:
+    void sample(double t, const LiveCam& c, std::vector<std::string>& lines);
+    void reset() { haveCam_ = haveV_ = false; }
+
+private:
+    bool haveCam_ = false, haveV_ = false;
+    rf::CamRow last_{};
+    int mode_ = -1, root_ = -1;
+    std::string tmpl_;
+};
+
+// The action word of his client's newest tick (item 5): the last entry of his BFPlayer's action
+// buffer, its serial telling one tick from the next. `have` false when the buffer is empty.
+struct LiveInput { bool have; uint32_t serial; uint16_t axes[6]; uint32_t buttons; };
+// in when a new tick's word differs from the last written; the same word on the next tick is not repeated.
+class InputTracker {
+public:
+    void sample(double t, const LiveInput& in, std::vector<std::string>& lines);
+    void reset() { have_ = false; }
+
+private:
+    bool have_ = false;
+    uint32_t serial_ = 0;
+    uint16_t axes_[6] = {};
+    uint32_t buttons_ = 0;
+};
+
 class PlayerTracker {
 public:
     void sample(double t, const std::vector<LivePlayer>& players, std::vector<std::string>& lines);
