@@ -36,9 +36,8 @@ TEST(projectile_flights)
     // The pooled 9 flies again: a new flight, named again.
     const float nan = std::numeric_limits<float>::quiet_NaN();
     tr.sample(3, { { 7, "SA7_Projectile", nan, 2, 3 }, { 9, "Rocket", 0, 0, 0 } }, l);
-    CHECK_EQ(l.size(), (size_t)2);
+    CHECK_EQ(l.size(), (size_t)1);   // 7's place isn't numbers: left out, still flying; 9 at 0,0,0: no pj
     CHECK_EQ(l[0], std::string("{\"k\":\"pn\",\"t\":3.000,\"o\":[[9,\"Rocket\"]]}"));
-    CHECK_EQ(l[1], std::string("{\"k\":\"pj\",\"t\":3.000,\"o\":[[9,0.00,0.00,0.00]]}"));   // 7's place isn't numbers: left out, still flying
     l.clear();
     tr.sample(4, {}, l);
     CHECK_EQ(l.size(), (size_t)1);
@@ -46,6 +45,36 @@ TEST(projectile_flights)
     l.clear();
     tr.sample(5, {}, l);
     CHECK_EQ(l.size(), (size_t)0);
+}
+
+TEST(projectile_pj_only_on_change)
+{
+    // A round holding still (a binoculars' spotting marker) is written once; one that has never been
+    // away from 0,0,0 not at all, until it moves off it.
+    ProjectileTracker tr;
+    std::vector<std::string> l;
+    tr.sample(1, { { 1, "BinocularsProjectile", 10, 20, 30 }, { 2, "BinocularsProjectile", 0, 0, 0 } }, l);
+    CHECK_EQ(l.size(), (size_t)3);
+    CHECK_EQ(l[2], std::string("{\"k\":\"pj\",\"t\":1.000,\"o\":[[1,10.00,20.00,30.00]]}"));
+    l.clear();
+    tr.sample(2, { { 1, "BinocularsProjectile", 10.001f, 20, 30 }, { 2, "BinocularsProjectile", 0.001f, 0, -0.001f } }, l);
+    CHECK_EQ(l.size(), (size_t)0);   // same at 2 decimals; still at the origin
+    tr.sample(3, { { 1, "BinocularsProjectile", 10.01f, 20, 30 }, { 2, "BinocularsProjectile", 5, 0, 0 } }, l);
+    CHECK_EQ(l.size(), (size_t)1);
+    CHECK_EQ(l[0], std::string("{\"k\":\"pj\",\"t\":3.000,\"o\":[[1,10.01,20.00,30.00],[2,5.00,0.00,0.00]]}"));
+    l.clear();
+    tr.sample(4, { { 1, "BinocularsProjectile", 10.01f, 20, 30 }, { 2, "BinocularsProjectile", 0, 0, 0 } }, l);
+    CHECK_EQ(l.size(), (size_t)1);   // 2 was placed away from the origin: its move back is written
+    CHECK_EQ(l[0], std::string("{\"k\":\"pj\",\"t\":4.000,\"o\":[[2,0.00,0.00,0.00]]}"));
+    l.clear();
+    tr.sample(5, { { 2, "BinocularsProjectile", 0, 0, 0 } }, l);
+    CHECK_EQ(l.size(), (size_t)1);
+    CHECK_EQ(l[0], std::string("{\"k\":\"pd\",\"t\":5.000,\"o\":[1]}"));
+    l.clear();
+    tr.sample(6, {}, l);
+    tr.sample(7, { { 1, "BinocularsProjectile", 10.01f, 20, 30 } }, l);   // a new flight at the old place
+    CHECK_EQ(l.size(), (size_t)3);
+    CHECK_EQ(l[2], std::string("{\"k\":\"pj\",\"t\":7.000,\"o\":[[1,10.01,20.00,30.00]]}"));
 }
 
 TEST(info_line)

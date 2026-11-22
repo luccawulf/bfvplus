@@ -2,6 +2,7 @@
 #include "replay_track.h"
 #include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <cmath>
 #include <set>
 #include "replay_pose.h"
@@ -117,17 +118,25 @@ void ProjectileTracker::sample(double t, const std::vector<LiveProjectile>& flig
     std::vector<rf::ProjRow> rows;
     for (const LiveProjectile& p : flights) {
         if (!seen.insert(p.key).second) continue;
-        if (!flying_.count(p.key)) {
+        auto it = flying_.find(p.key);
+        if (it == flying_.end()) {
             if (flying_.size() >= 1024) { seen.erase(p.key); continue; }
-            flying_.insert(p.key);
+            it = flying_.emplace(p.key, std::string()).first;
             lines.push_back(rf::pnLine(t, p.key, p.tmpl));
         }
-        if (std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z)) rows.push_back({ p.key, p.x, p.y, p.z });
+        if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z)) continue;
+        char at[96];
+        std::snprintf(at, sizeof(at), "%.2f,%.2f,%.2f", p.x, p.y, p.z);
+        if (it->second == at) continue;   // held still at the written precision
+        const bool origin = std::fabs(p.x) < 0.005f && std::fabs(p.y) < 0.005f && std::fabs(p.z) < 0.005f;
+        if (it->second.empty() && origin) continue;   // never yet placed away from 0,0,0
+        it->second = at;
+        rows.push_back({ p.key, p.x, p.y, p.z });
     }
     if (!rows.empty()) lines.push_back(rf::pjLine(t, rows));
     std::vector<int> gone;
-    for (int k : flying_)
-        if (!seen.count(k)) gone.push_back(k);
+    for (const auto& f : flying_)
+        if (!seen.count(f.first)) gone.push_back(f.first);
     for (int k : gone) flying_.erase(k);
     if (!gone.empty()) lines.push_back(rf::pdLine(t, gone));
 }

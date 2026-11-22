@@ -42,16 +42,19 @@ private:
 // object manager id (obj+0x48), with its template's name and place.
 struct LiveProjectile { int key; std::string tmpl; float x, y, z; };
 
-// pn on a flight's first sample, one pj line a sample with every flight whose place is numbers, and
-// one pd line for the flights gone since the last sample (a pooled round flies again under its key
-// with a new pn). At most 1024 flights at once, as on the server.
+// pn on a flight's first sample, one pj line a sample with every flight whose place is numbers and
+// changed since its last pj (at the written 2 decimals), and one pd line for the flights gone since
+// the last sample (a pooled round flies again under its key with a new pn). A flight never written
+// away from the origin gets no pj at all: the owner's Khe Sanh test (replay_20261122-021912) had 198
+// binoculars' spotting markers holding still, many at exactly 0,0,0, which rewrote 12.8 MB of pj
+// in 7 minutes; the server writes every sample. At most 1024 flights at once, as on the server.
 class ProjectileTracker {
 public:
     void sample(double t, const std::vector<LiveProjectile>& flights, std::vector<std::string>& lines);
     void reset() { flying_.clear(); }
 
 private:
-    std::set<int> flying_;
+    std::map<int, std::string> flying_;   // key -> its last written place as written ("" none yet)
 };
 
 // The info line: written once the level and the player's name are known, and again whenever one of
