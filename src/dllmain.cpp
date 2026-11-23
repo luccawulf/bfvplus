@@ -13,6 +13,7 @@
 #include "capture.h"
 #include "sensitivity.h"
 #include "replay.h"
+#include "chat_hook.h"
 #include "fire_hook.h"
 #include "replay_probe.h"
 #include "replay_settings.h"
@@ -99,6 +100,11 @@ static DWORD WINAPI initThread(LPVOID)
     // The fire hook (fire_hook.cpp): with [replay] recordReplays or probe on, and only when all six
     // fireBarrel call sites match (it logs which one didn't otherwise).
     if (g_replay.record || g_replay.probe) installFireHook();
+
+    // The chat hook (chat_hook.cpp): with [replay] recordReplays on, and only when addPlayerChatMessage's
+    // entry and all seven of its call sites match (it logs which one didn't otherwise). Before the first
+    // file opens, whose header says whether it has the chat box's lines.
+    if (g_replay.record) installChatHook();
 
 
     // Stationary-MG sensitivity needs the InfantryControls / LandSeaControls objects,

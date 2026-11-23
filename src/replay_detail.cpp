@@ -221,3 +221,30 @@ size_t ShotQueue::dropped() const
     std::lock_guard<std::mutex> lock(mu_);
     return dropped_;
 }
+
+void ChatQueue::push(uint64_t ms, int pid, int team, std::string text)
+{
+    std::lock_guard<std::mutex> lock(mu_);
+    if (q_.size() >= cap_) { ++dropped_; return; }
+    q_.push_back({ ms, pid, team, std::move(text) });
+}
+
+void ChatQueue::drain(std::vector<QueuedChat>& out)
+{
+    std::lock_guard<std::mutex> lock(mu_);
+    out.swap(q_);
+    q_.clear();
+}
+
+void ChatQueue::clear()
+{
+    std::lock_guard<std::mutex> lock(mu_);
+    q_.clear();
+    dropped_ = 0;
+}
+
+size_t ChatQueue::dropped() const
+{
+    std::lock_guard<std::mutex> lock(mu_);
+    return dropped_;
+}

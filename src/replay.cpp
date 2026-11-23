@@ -11,6 +11,8 @@
 //   mouse but the server's events keep coming.
 // - replay_onFire (fire_hook.cpp, every round fireBarrel fires) queues the round; both hooks above write
 //   the queued rounds first, each at its own time, so the file stays in time order.
+// - replay_onChat (chat_hook.cpp, every player line the chat box is given, his own among them) queues the
+//   line the same way; it is written with the rounds, in time order among them.
 // - replay_shutdown (DllMain at process exit): the end line and a last flush.
 // All of them return at once while [replay] recordReplays is off.
 #define WIN32_LEAN_AND_MEAN
@@ -24,6 +26,7 @@
 #include <unordered_map>
 #include <vector>
 #include "bfv_addresses.h"
+#include "chat_hook.h"
 #include "plus_log.h"
 #include "replay.h"
 #include "replay_events.h"
@@ -51,6 +54,7 @@ SoldierTracker g_soldiers;
 HitMarkTracker g_hits;
 MusicTracker g_music;
 ShotQueue g_shots;
+ChatQueue g_chat;
 // replay-recorder-2: the run's labels, rounds in flight, soldiers past the client's animation range.
 InfoTracker g_info;
 ProjectileTracker g_proj;
@@ -96,6 +100,7 @@ void ensureSession()
     if (g_session) return;
     SessionConfig cfg{ g_replay.record, g_replay.sampleHz, plusExeDir() + "replays", kVersion, modFromCommandLine(),
         __DATE__ " " __TIME__ };
+    cfg.chatLines = chatHookInstalled();
     g_session.reset(new ReplaySession(cfg));
     g_events.reset(new EventDecoder(templateNameById));
 }
@@ -114,6 +119,7 @@ void noticeNewFile()
     g_hits.reset();
     g_music.reset();
     g_shots.clear();
+    g_chat.clear();
     g_info.reset();
     g_proj.reset();
     g_far.reset();
@@ -137,16 +143,27 @@ void logCloses()
     plusLog("replay: closed %s (%s), end t=%.3f", g_path.c_str(), g_session->lastClose().c_str(), g_session->lastActivityT());
 }
 
-// The rounds fired since the last hook, each at its own time, before the hook writes anything else (so
-// the file stays in time order). Called with g_mu held.
+// The rounds fired and the chat lines given since the last hook, each at its own time and the two in
+// time order among themselves, before the hook writes anything else (so the file stays in time order).
+// Called with g_mu held.
 void drainShots()
 {
     static std::vector<QueuedShot> q;
+    static std::vector<QueuedChat> c;
     g_shots.drain(q);
-    if (q.empty() || !g_session || !g_session->recording()) return;
+    g_chat.drain(c);
+    if ((q.empty() && c.empty()) || !g_session || !g_session->recording()) return;
     std::string line;
-    for (const QueuedShot& s : q)
-        if (shotLine(g_session->t(s.ms), s.shot, line)) g_session->write(line);
+    size_t i = 0, j = 0;
+    while (i < q.size() || j < c.size()) {
+        if (j >= c.size() || (i < q.size() && q[i].ms <= c[j].ms)) {
+            if (shotLine(g_session->t(q[i].ms), q[i].shot, line)) g_session->write(line);
+            ++i;
+        } else {
+            g_session->write(rf::chatLine(g_session->t(c[j].ms), c[j].pid, c[j].team, c[j].text));
+            ++j;
+        }
+    }
 }
 
 }  // namespace
@@ -162,6 +179,14 @@ void replay_onFire(uintptr_t fireArms, uintptr_t player, uintptr_t mat)
     if (!readShot(fireArms, player, mat, s, bf)) return;
     s.local = bf && bf == g_localBF.load(std::memory_order_relaxed);
     g_shots.push(nowMs(), s);
+}
+
+// chat_hook.cpp, once per chat box line (game thread, without g_mu: the game may give the box a line from
+// inside the event hook, which holds it).
+void replay_onChat(int pid, int team, const uint16_t* units, size_t n)
+{
+    if (!g_live.load(std::memory_order_relaxed)) return;
+    g_chat.push(nowMs(), pid, team, rf::chatText(units, n));
 }
 
 void replay_onEvent(void* ev)

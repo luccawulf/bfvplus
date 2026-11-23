@@ -28,6 +28,16 @@ SITE(SITE_fireBarrelCall4, 0x0067F8B3, "E8 28 DF FF FF", "Fire -> fireBarrel, pu
 SITE(SITE_fireBarrelCall5, 0x0067F90F, "E8 CC DE FF FF", "Fire -> fireBarrel, push esi (static RE)")
 SITE(SITE_fireBarrelCall6, 0x0067F93B, "E8 A0 DE FF FF", "Fire -> fireBarrel, push edi (static RE)")
 SITE(SITE_fireBarrelEntry, 0x0067D7E0, "81 EC C0 00 00 00 53 55", "fireBarrel's entry: sub esp,0xC0; push ebx; push ebp (thiscall, ret 0xC)")
+// The chat hook (chat_hook.cpp, 2026-11-23): BfMenu::addPlayerChatMessage(wstring, BFPlayer*, int) 0x004CC2A0
+// and its seven call sites, every E8 to it in v1.21's .text (static RE; the owner's patched exe alike).
+SITE(SITE_addPlayerChatEntry, 0x004CC2A0, "83 EC 08 53 55 56 57 8B", "addPlayerChatMessage's entry: sub esp,8; push ebx, ebp, esi, edi (thiscall, ret 0x24)")
+SITE(SITE_addPlayerChatCall1, 0x004CC6B4, "E8 E7 FB FF FF", "console message switch, type 1 -> addPlayerChatMessage (static RE)")
+SITE(SITE_addPlayerChatCall2, 0x004EE8D2, "E8 C9 D9 FD FF", "chat input -> addPlayerChatMessage, the sender's own line (static RE)")
+SITE(SITE_addPlayerChatCall3, 0x004EED83, "E8 18 D5 FD FF", "chat input -> addPlayerChatMessage, the sender's own line (static RE)")
+SITE(SITE_addPlayerChatCall4, 0x0051DF4F, "E8 4C E3 FA FF", "incoming chat line -> addPlayerChatMessage (static RE)")
+SITE(SITE_addPlayerChatCall5, 0x0051DFA7, "E8 F4 E2 FA FF", "incoming chat line -> addPlayerChatMessage (static RE)")
+SITE(SITE_addPlayerChatCall6, 0x00526098, "E8 03 62 FA FF", "-> addPlayerChatMessage (static RE)")
+SITE(SITE_addPlayerChatCall7, 0x00529437, "E8 64 2E FA FF", "-> addPlayerChatMessage (static RE)")
 
 // ---- vtables (identify live objects; not patched) --------------------------------------------
 VTABLE(VT_PlayerControlObject, 0x00B93D24, "RTTI (tools/rtti_vtables.py): PlayerControlObject, subobject +0x0")
@@ -122,6 +132,8 @@ inline constexpr uintptr_t CP_TEAM = 0x1D4, CP_TEMPLATE = 0x1C4;
 // FireArms::handleUpdate 0x006809D0; fireBarrel(IPlayer*, Mat4&, int) 0x0067D7E0, ret 0xC; its Mat4 is
 // 16 floats like an object's rows (a, b, c, position; a round leaves along row c).
 inline constexpr uintptr_t FIRE_FN = 0x0067F170, FIRE_BARREL_FN = 0x0067D7E0;
+// BfMenu::addPlayerChatMessage(std::wstring line, BFPlayer* player, int team), thiscall, ret 0x24 (chat_hook.cpp).
+inline constexpr uintptr_t ADD_PLAYER_CHAT_FN = 0x004CC2A0;
 // Animation: getCurrentStateFlags 0x0072C3F0 reads an instance's state +0x18, then *(0x00DE450C)'s
 // vector of AnimationState* (begin +0x18, end +0x1C) and the state's flags +0x2C.
 inline constexpr uintptr_t ANIM_ASM_GLOBAL = 0x00DE450C;

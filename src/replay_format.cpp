@@ -63,7 +63,26 @@ std::string headerLine(const Header& h)
 {
     return "{\"k\":\"h\",\"v\":5,\"plus\":\"bfvplus/" + jsonEscape(h.version) + "\",\"game\":\"bfv\",\"mod\":\""
         + jsonEscape(h.mod) + "\",\"build\":\"" + jsonEscape(h.build) + "\",\"start\":\"" + jsonEscape(h.startIso)
-        + "\",\"hz\":" + std::to_string(h.hz) + "}";
+        + "\",\"hz\":" + std::to_string(h.hz) + (h.chatLines ? ",\"chatLines\":1}" : "}");
+}
+
+std::string chatText(const uint16_t* units, size_t n)
+{
+    std::string out;
+    if (!units) return out;
+    if (n > 255) n = 255;
+    out.reserve(n);
+    for (size_t i = 0; i < n && units[i]; ++i) {
+        const uint16_t u = units[i];
+        out += u < 0x100 ? (char)u : u == 0x20AC ? (char)0x80 : '?';
+    }
+    return out;
+}
+
+std::string chatLine(double t, int pid, int team, std::string_view text)
+{
+    return "{\"k\":\"chat\",\"t\":" + t3(t) + ",\"pid\":" + std::to_string(pid) + ",\"team\":" + std::to_string(team)
+        + ",\"text\":\"" + jsonEscape(text) + "\"}";
 }
 
 std::string endLine(double t)

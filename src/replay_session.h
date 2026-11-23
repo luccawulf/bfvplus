@@ -17,7 +17,8 @@
 #include <string_view>
 #include "replay_file.h"
 
-struct SessionConfig { bool enabled; int hz; std::string dir, version, mod, build; };
+// `chatLines`: the chat hook is in (chat_hook.cpp), so each file's header says it has the chat box's lines.
+struct SessionConfig { bool enabled; int hz; std::string dir, version, mod, build; bool chatLines = false; };
 
 class ReplaySession {
 public:

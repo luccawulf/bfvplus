@@ -145,8 +145,14 @@ sampleHz      = 30   ; soldier and vehicle samples per second, 1-30
     held for one tick between two samples is kept
   - these two were found by reading the game's code only; `tools/check_view.py <file>` compares them
     with your soldier, aim and rounds in the same file
+  - the chat box's lines as your game shows them (`chat`: the line, its sender and his side), your own
+    lines among them: the server never sends a player his own line back, so the chat pieces it sends
+    (also kept) miss everything you say. The file's header then says `"chatLines":1`, and the viewer
+    reads these lines alone. Found by reading the game's code only (the chat box's
+    `addPlayerChatMessage`, 0x004CC2A0, and its seven call sites)
 - **Read-only:** it reads what your game already holds. To see each round fired, it watches the six
-  places the game fires a barrel (the round itself is untouched). It sends nothing and changes nothing
+  places the game fires a barrel (the round itself is untouched); to see each chat line, the seven
+  places the game hands one to the chat box (the line itself is untouched). It sends nothing and changes nothing
   about gameplay, input or network traffic.
 - **Your view of the round:** a client only hears about what the server sends it. Far-away
   players update less often, and fast aircraft are shown as your client extrapolated them. Your client

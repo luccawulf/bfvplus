@@ -18,9 +18,19 @@ std::string jsonEscape(std::string_view latin1);
 // "replay_20261106-213005.ndjson"; dup >= 2 adds "-<dup>" for a second file in the same second.
 std::string fileName(const std::tm& local, int dup);
 
-struct Header { std::string version, mod, build, startIso; int hz; };
+// `chatLines`: the file has the chat box's whole lines (`chat`, chat_hook.cpp), which the viewer then reads
+// alone, leaving the ChatFragment pieces.
+struct Header { std::string version, mod, build, startIso; int hz; bool chatLines = false; };
 std::string headerLine(const Header& h);
 std::string endLine(double t);
+
+// A chat box line (BfMenu::addPlayerChatMessage's wstring) as bytes: UTF-16 units below 256 as themselves
+// (Latin-1), U+20AC as the 0x80 byte the server's lines put between words, anything else '?'; up to the
+// first NUL and at most 255 units.
+std::string chatText(const uint16_t* units, size_t n);
+// {"k":"chat","t":..,"pid":..,"team":..,"text":".."}: the line as the chat box shows it, its sender (-1 for
+// none) and his side, as BF42++'s replay_onChat and the server recorder's write_chat_locked write it.
+std::string chatLine(double t, int pid, int team, std::string_view text);
 
 struct Pose { int id; float x, y, z, qx, qy, qz, qw; };
 // Every value finite and each coordinate within 100000 m: a pooled or half-built object's

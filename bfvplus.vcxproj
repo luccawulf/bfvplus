@@ -91,10 +91,12 @@
     <ClCompile Include="src\replay_read.cpp" />
     <ClCompile Include="src\replay_detail.cpp" />
     <ClCompile Include="src\replay_decode.cpp" />
+    <ClCompile Include="src\chat_hook.cpp" />
     <ClCompile Include="src\fire_hook.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\buddycolors.h" />
+    <ClInclude Include="src\chat_hook.h" />
     <ClInclude Include="src\config.h" />
     <ClInclude Include="src\capture.h" />
     <ClInclude Include="src\sensitivity.h" />

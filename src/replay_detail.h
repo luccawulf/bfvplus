@@ -120,6 +120,22 @@ bool shotLine(double t, const LiveShot& s, std::string& out);
 // fireBarrel's rounds between two of the recorder's hooks: the fire hook pushes (game thread, without
 // the recorder's lock), the next event or poll drains them in order, before its own lines, so the file
 // stays in time order. At most `cap` wait; more are dropped and counted (nothing drains in the menu).
+// The chat box's lines the chat hook saw since the recorder last wrote (chat_hook.cpp): the hook only
+// queues, and the recorder's locked paths write them, each at its own time, beside the rounds.
+struct QueuedChat { uint64_t ms; int pid; int team; std::string text; };
+class ChatQueue {
+public:
+    explicit ChatQueue(size_t cap = 256) : cap_(cap) {}
+    void push(uint64_t ms, int pid, int team, std::string text);
+    void drain(std::vector<QueuedChat>& out);   // replaces out's contents
+    void clear();                               // a new file: forget the waiting lines and the count
+    size_t dropped() const;
+private:
+    mutable std::mutex mu_;
+    std::vector<QueuedChat> q_;
+    size_t cap_, dropped_ = 0;
+};
+
 struct QueuedShot { uint64_t ms; LiveShot shot; };
 class ShotQueue {
 public:

@@ -48,7 +48,7 @@ void ReplaySession::openFile(uint64_t nowMs, const std::tm& local)
     char iso[80];
     std::snprintf(iso, sizeof(iso), "%04d-%02d-%02dT%02d:%02d:%02d", local.tm_year + 1900, local.tm_mon + 1,
         local.tm_mday, local.tm_hour, local.tm_min, local.tm_sec);
-    file_.line(rf::headerLine({ cfg_.version, cfg_.mod, cfg_.build, iso, cfg_.hz }));
+    file_.line(rf::headerLine({ cfg_.version, cfg_.mod, cfg_.build, iso, cfg_.hz, cfg_.chatLines }));
 }
 
 bool ReplaySession::onFrame(uint64_t nowMs, bool localPlayerPresent)

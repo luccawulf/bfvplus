@@ -11,3 +11,6 @@ void replay_onEvent(void* ev);
 void replay_onInputPoll();
 void replay_shutdown();
 void replay_onFire(uintptr_t fireArms, uintptr_t player, uintptr_t mat);
+// From chat_hook.cpp, once per line the chat box is given: its sender's id (-1 none), his side and the line's
+// UTF-16 units. Queued; written as a `chat` line by the next locked path.
+void replay_onChat(int pid, int team, const uint16_t* units, size_t n);
