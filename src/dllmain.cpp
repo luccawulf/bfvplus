@@ -11,6 +11,7 @@
 #include "buddycolors.h"
 #include "config.h"
 #include "capture.h"
+#include "keyhash.h"
 #include "sensitivity.h"
 
 // Real dinput8.dll function we forward to.
@@ -87,6 +88,10 @@ static DWORD WINAPI initThread(LPVOID)
     // own binary sanity check and is a no-op if disabled or the bytes don't match.
     if (g_captureEnabled) installCaptureHook();
 
+    // playerKeyHash override: present a chosen CD-key hash to the server (for testing
+    // your own unpure server with a known identity). Self-gates on a configured
+    // override (bfvplus.ini [keyhash] / keyhash.txt) and the binary sanity check.
+    installKeyhashHook();
 
     // Stationary-MG sensitivity needs the InfantryControls / LandSeaControls objects,
     // which we capture at their (single) construction sites. This has to be in place

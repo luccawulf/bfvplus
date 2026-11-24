@@ -15,6 +15,7 @@
 #include "config.h"
 #include "buddycolors.h"
 #include "capture.h"
+#include "keyhash.h"
 #include "sensitivity.h"
 
 #include <string>
@@ -125,6 +126,15 @@ static void writeDefaultIni(const std::string& path)
     f << "; Seconds between object snapshots (0 = only snapshot on join).\n";
     f << "dumpObjectsInterval = 30\n";
     f << "\n";
+#ifndef BFVPLUS_PUBLIC
+    f << "[keyhash]\n";
+    f << "; Present a chosen 32-hex CD-key hash to the server instead of your real one,\n";
+    f << "; so you can test your own (unpure) server with a known identity. Uncomment and\n";
+    f << "; set a 32-character hex value below, or drop a keyhash.txt (first 32 hex chars)\n";
+    f << "; next to BfVietnam.exe. Leave commented out to keep your real hash.\n";
+    f << ";override = 0123456789abcdef0123456789abcdef\n";
+    f << "\n";
+#endif
     f << "[sensitivity]\n";
     f << "; Correct the look sensitivity that feels doubled while moving on foot.\n";
     f << "; BFV scales the yaw delta by a per-axis modifier that the pitch delta\n";
@@ -205,6 +215,14 @@ void loadConfig()
             continue;
         }
 
+#ifndef BFVPLUS_PUBLIC
+        if (section == "keyhash") {
+            std::string k = key;
+            for (auto& ch : k) ch = (char)tolower((unsigned char)ch);
+            if (k == "override") setKeyhashOverride(value.c_str());
+            continue;
+        }
+#endif
 
         if (section == "sensitivity") {
             std::string k = key, v = value;

@@ -55,7 +55,11 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <!-- ExtraDefines lets the public release be built from this same tree:
+             msbuild ... /p:ExtraDefines=BFVPLUS_PUBLIC
+           which compiles out the keyhash override (see keyhash.cpp). Building
+           without it produces the full personal build. -->
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;_CRT_SECURE_NO_WARNINGS;$(ExtraDefines);%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <Optimization>MaxSpeed</Optimization>
@@ -76,12 +80,14 @@
     <ClCompile Include="src\buddycolors.cpp" />
     <ClCompile Include="src\config.cpp" />
     <ClCompile Include="src\capture.cpp" />
+    <ClCompile Include="src\keyhash.cpp" />
     <ClCompile Include="src\sensitivity.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\buddycolors.h" />
     <ClInclude Include="src\config.h" />
     <ClInclude Include="src\capture.h" />
+    <ClInclude Include="src\keyhash.h" />
     <ClInclude Include="src\sensitivity.h" />
   </ItemGroup>
   <ItemGroup>

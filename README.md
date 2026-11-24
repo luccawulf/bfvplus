@@ -4,14 +4,10 @@ A small mod for **Battlefield Vietnam v1.21**. Two features:
 
 1. **Buddy colors** — the scoreboard's "Add Buddy" button cycles through preset
    colors instead of always assigning green.
-2. **Mouse sensitivity fixes** — corrects the horizontal look sensitivity that
-   feels doubled while moving on foot, and optionally makes stationary MGs use
-   your Infantry sensitivity instead of LandSea.
+2. **Look sensitivity fix** — corrects the horizontal look sensitivity that feels
+   doubled while moving on foot. Off by default; enable it in `bfvplus.ini`.
 
-Both sensitivity options are **off by default** — nothing changes until you enable
-them in `bfvplus.ini`.
-
-Inspired by [uuuzbf/bf42plus](https://github.com/uuuzbf/bf42plus).
+Inspired by uuuzbf/bf42plus.
 
 ## 1. Buddy colors
 
@@ -120,16 +116,32 @@ workload (free Community edition is fine).
 
 Output: `Release\dinput8.dll`.
 
+### Public vs personal build
+
+The tree builds two variants from the same source:
+
+| | command | output |
+|---|---|---|
+| Personal (full) | as above | `Release\dinput8.dll` |
+| Public release | add `/p:ExtraDefines=BFVPLUS_PUBLIC` | `ReleasePublic\dinput8.dll` |
+
+`BFVPLUS_PUBLIC` compiles out the keyhash override — a debugging aid for testing
+your own unpure server under a chosen identity, which is not shipped publicly.
+It is compiled out rather than merely disabled, so none of its code or strings
+are present in the public binary.
+
+```bash
+msbuild bfvplus.vcxproj /p:Configuration=Release /p:Platform=Win32 /p:ExtraDefines=BFVPLUS_PUBLIC /p:OutDir=ReleasePublic\ /p:IntDir=ReleasePublic\obj\
+```
+
 ## Install
 
 1. Find your BFV install folder (the one containing `BfVietnam.exe`).
-2. Copy `dinput8.dll` into that folder (from a release, or from `Release\` if you built it).
+2. Copy `dinput8.dll` from `Release\` into that folder.
 3. Start the game. A `bfvplus.ini` will be created next to `BfVietnam.exe`
    on first launch with the default preset color cycle.
 
 ## INI format
-
-`bfvplus.ini` is created next to `BfVietnam.exe` on first launch. Full example:
 
 ```ini
 [presetcolors]
@@ -137,23 +149,12 @@ color = #00ff00   ; green (BFV default)
 color = #ffff00   ; yellow
 color = #ff0000   ; red
 color = #00aaff   ; light blue
-
-[sensitivity]
-correctedLookSensitivity   = off     ; look sensitivity fix (section 2)
-correctedLookScale         = 0.5
-correctedLookTrigger       = strafe  ; strafe | any
-stationaryMGInfSensitivity = off     ; stationary MG fix (section 3)
-
-[capture]
-enabled             = off   ; log server GameEvents to logsfvplus_server.log
-dumpObjects         = off
-dumpObjectsInterval = 30
 ```
 
-- Colour order matters. The cycle follows the order of entries, wrapping after
-  the last.
+- Order matters. The cycle follows the order of entries in the file.
+- After the last entry, the cycle wraps back to the first.
+- Add as many entries as you want.
 - The INI is read once at game start. Restart the game to apply changes.
-- Both sensitivity options default to **off** — nothing changes until you opt in.
 
 ## Uninstall
 
