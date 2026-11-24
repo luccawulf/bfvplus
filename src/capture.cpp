@@ -20,6 +20,7 @@
 #include "replay.h"
 #include "replay_probe.h"
 #include "replay_settings.h"
+#include "keyhash.h"
 
 bool g_captureEnabled = true;
 bool g_dumpObjects = true;          // [capture] dumpObjects (default on)
@@ -636,6 +637,20 @@ static bool __stdcall hook_readEvent(void* buffer, int* outEvent)
         if (g_replay.probe) probe_onEvent(ev);
         replay_onEvent(ev);
 
+        // Emit the local player's BYTE-EXACT keyhash once - from field 1 of the gcd CD-key
+        // response (MD5 of the CD key), not the framing-shifted over-read. The 100%-accurate
+        // value the server actually records for you.
+        static bool localKeyhashEmitted = false;
+        if (g_captureEnabled && !localKeyhashEmitted && g_haveLocalKeyhash) {
+            char line[176];
+            _snprintf(line, sizeof(line),
+                      "{\"event\":\"LocalKeyHash\",\"keyhash\":\"%s\","
+                      "\"note\":\"byte-exact MD5(cdkey) from the gcd CD-key response (local player)\"}\n",
+                      g_localKeyhash);
+            line[sizeof(line) - 1] = 0;
+            logWrite(line);
+            localKeyhashEmitted = true;
+        }
         // Auto-dump objects when a join completes (DataBaseCompleteEvent 0x34).
         __try {
             int id = ((getType_t)(*(void***)ev)[0])(ev);
