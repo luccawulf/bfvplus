@@ -133,7 +133,7 @@ static void writeDefaultIni(const std::string& path)
     f << "; so you can test your own (unpure) server with a known identity. Uncomment and\n";
     f << "; set a 32-character hex value below, or drop a keyhash.txt (first 32 hex chars)\n";
     f << "; next to BfVietnam.exe. Leave commented out to keep your real hash.\n";
-    f << ";override = 0123456789abcdef0123456789abcdef\n";
+    f << ";override = <32 hex characters>\n";
     f << "\n";
 #endif
     f << "[sensitivity]\n";

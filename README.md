@@ -1,13 +1,41 @@
-# bfvplus 0.2 — buddy colors + look sensitivity fix for Battlefield Vietnam
+# bfvplus 0.6 — for Battlefield Vietnam v1.21
 
-A small mod for **Battlefield Vietnam v1.21**. Two features:
+A small `dinput8.dll` mod for **Battlefield Vietnam v1.21**. Five features:
 
 1. **Buddy colors** — the scoreboard's "Add Buddy" button cycles through preset
    colors instead of always assigning green.
 2. **Look sensitivity fix** — corrects the horizontal look sensitivity that feels
-   doubled while moving on foot. Off by default; enable it in `bfvplus.ini`.
+   doubled while moving on foot. Off by default.
+3. **Stationary MG sensitivity** — keeps your on-foot mouse feel on a stationary MG.
+   Off by default.
+4. **Keyhash changer** *(new in 0.6)* — present a chosen key hash to servers that
+   don't check CD keys, instead of the one made from your CD key. Off until you set one.
+5. **Client replay recorder** *(new in 0.6)* — records each game you join, from your
+   own client, for the replay viewer. Based on Skandia's replay recorder for
+   Battlefield 1942. Off by default.
 
 Inspired by uuuzbf/bf42plus.
+
+## What's new in 0.6
+
+- **Keyhash changer.** Set `[keyhash] override` in `bfvplus.ini` (or drop a
+  `keyhash.txt` next to `BfVietnam.exe`) and that 32-character hash is what a
+  server that doesn't check CD keys records for you. See [section 4](#4-keyhash-changer).
+- **Client replay recorder.** Turn on `[replay] recordReplays` and every game you
+  join is written to `replays\` as a replay file: the server's events, every
+  soldier and vehicle your client knows at up to 30 samples a second, damage,
+  rounds, tickets, control points, radios, chat and your own view and input.
+  See [section 5](#5-client-replay-recorder).
+
+## Install
+
+1. Download `bfvplus-0.6.zip` from the [Releases](../../releases) page.
+2. Extract `dinput8.dll` and `bfvplus.ini` into your BFV folder (the one
+   containing `BfVietnam.exe`).
+3. Start the game.
+
+If you don't use the shipped `bfvplus.ini`, one is created next to
+`BfVietnam.exe` on first launch. To build the DLL yourself, see [Build](#build).
 
 ## 1. Buddy colors
 
@@ -34,12 +62,12 @@ The mod is loaded as `dinput8.dll`. BFV's `BfVietnam.exe` imports the
 `DirectInput8Create` function from `dinput8.dll` for keyboard/mouse input.
 Windows finds our DLL in the BFV folder before the system one, so we get
 loaded into the process. We proxy `DirectInput8Create` to the real system
-`dinput8.dll` (so input still works), then patch a single 5-byte `call`
-instruction in the scoreboard's button handler to redirect through our
-custom logic.
+`dinput8.dll` (so input still works), then patch the few places in the game
+each feature needs. Every patch first checks that the bytes it replaces are
+the ones it expects, and the feature switches itself off if they aren't.
 
-The patched instruction is at `0x0057A1E4` and originally called
-`addPlayerToBuddyList(playerId)` with default green. Our replacement
+For buddy colors, the patched instruction is at `0x0057A1E4` and originally
+called `addPlayerToBuddyList(playerId)` with default green. Our replacement
 checks if the player is already a buddy (via `isPlayerIDInBuddyList`),
 and either does the original behavior or calls `addPlayerToBuddyListByName`
 with the next color in the cycle.
@@ -104,10 +132,44 @@ enum-to-string jump table at `0x0061818C`). The live sensitivity and invert valu
 are read from the game's own `InfantryControls` and `LandSeaControls` objects,
 which bfvplus captures as the game constructs them.
 
-## 4. Replay recorder (in development, 0.3-dev)
+## 4. Keyhash changer
 
-The Battlefield Vietnam version of BF42++'s replay recorder: it records each game you join, from your
-own client, for the replay viewer. **Off by default.**
+When you join a server, your client answers the server's CD-key challenge. The
+first field of that answer is your **key hash**: the MD5 of your CD key, 32 hex
+characters. Servers use it as your identity (bans, admin rights, stats).
+
+The keyhash changer lets you present a **chosen** 32-character hash instead. It
+only takes effect on servers that **don't check CD keys**: those record whatever
+the first field says. A server that checks CD keys against a CD-key master compares
+that field with the rest of the answer, which is still made from your real key, so
+a changed hash won't match there. Leave the changer off for those servers.
+
+```ini
+[keyhash]
+override = <your 32 hex characters>   ; e.g. 32 characters from 0-9 and a-f
+```
+
+Or drop a `keyhash.txt` next to `BfVietnam.exe` whose first 32 characters are the
+hash (used only when `bfvplus.ini` sets none). With neither, nothing is changed and
+the hook isn't installed.
+
+- **How it works:** bfvplus detours the game's CD-key answer builder
+  (`gcd_compute_response`, `0x005C70A0`). The game builds its real answer first, so
+  you still need a valid CD key to connect; bfvplus then replaces the 32-character
+  first field with your override, the same length, and touches nothing else.
+- **What it logs:** `logs\bfvplus_keyhash.log` notes whether an override is active
+  and each time it is applied, **including your real key hash**. Don't post that
+  log publicly. With `[capture] enabled = on` and an override active, the capture
+  log also gets one `LocalKeyHash` line with your real hash.
+- **Please use it fairly:** on your own server, or where the server's admin is
+  fine with it. Key hashes are how admins tell players apart.
+- To build a DLL without it, see [Build](#build).
+
+## 5. Client replay recorder
+
+The Battlefield Vietnam client recorder, based on Skandia's replay recorder for
+Battlefield 1942: it records each game you join, from your own client, for the
+replay viewer. **Off by default.** New in 0.6 and still in active development.
 
 ```ini
 [replay]
@@ -115,10 +177,11 @@ recordReplays = on   ; off by default
 sampleHz      = 30   ; soldier and vehicle samples per second, 1-30
 ```
 
-- **One file per join:** `replays\replay_<date>-<time>.ndjson` next to `BfVietnam.exe`, in BF42++'s
-  replay format (version 5, marked `"game":"bfv"`). It is written to disk every second, so a game
-  crash loses at most about a second, and it is closed with an `end` record when you leave or quit.
-  A file a crash cut short has no `end` record and still plays, to its last record.
+- **One file per join:** `replays\replay_<date>-<time>.ndjson` next to `BfVietnam.exe`, in the
+  same replay format as the BF1942 recorder (version 5, marked `"game":"bfv"`). It is written to
+  disk every second, so a game crash loses at most about a second, and it is closed with an `end`
+  record when you leave or quit. A file a crash cut short has no `end` record and still plays, to
+  its last record.
 - **What it holds:**
   - every game event the server sends (players joining and leaving, teams, vehicles entered and
     left, kills and scores, objects made and destroyed, the level and rules), in the same form as
@@ -162,73 +225,91 @@ sampleHz      = 30   ; soldier and vehicle samples per second, 1-30
   switches itself off and writes one line to `logs\bfvplus.log`. Everything else keeps working. If only
   the firing places differ, it records everything but the rounds and says so in the same log.
 
+## INI reference
+
+`bfvplus.ini` sits next to `BfVietnam.exe` and is read once at game start
+(restart the game to apply changes). The release ships this one:
+
+```ini
+[presetcolors]               ; the Add Buddy color cycle, in order
+color = #00ff00              ; green (BFV default)
+color = #ffff00              ; yellow
+color = #ff0000              ; red
+color = #00aaff              ; light blue
+
+[sensitivity]
+correctedLookSensitivity = off
+correctedLookScale = 0.5
+correctedLookTrigger = strafe
+stationaryMGInfSensitivity = off
+
+[keyhash]
+;override = <32 hex characters>
+
+[replay]
+recordReplays = off
+sampleHz = 30
+
+[capture]                    ; every server GameEvent to logs\bfvplus_server.log (JSON Lines)
+enabled = off
+dumpObjects = off
+dumpObjectsInterval = 30
+```
+
+- `[presetcolors]`: order matters; after the last entry the cycle wraps to the
+  first. Add as many `color = #RRGGBB` lines as you want.
+- `[capture]` is a debugging log of the server's game events, for modders.
+
 ## Build
 
-You need **Visual Studio 2022** with the "Desktop development with C++"
-workload (free Community edition is fine).
+You need **Visual Studio 2026** with the "Desktop development with C++" workload
+(free Community edition is fine). The project uses platform toolset `v145`; with
+Visual Studio 2022, retarget it to `v143` first (right-click the project →
+Retarget Projects).
 
 1. Open `bfvplus.sln`.
 2. Set the active configuration to **Release / Win32** (toolbar dropdown).
    `Win32` means 32-bit x86 — BFV is 32-bit.
 3. Build → Build Solution (`Ctrl+Shift+B`).
 
-Output: `Release\dinput8.dll`.
+Output: `Release\dinput8.dll`. This is the build the release ships, with every
+feature including the keyhash changer.
 
-### Public vs personal build
+### Building without the keyhash changer
 
-The tree builds two variants from the same source:
-
-| | command | output |
-|---|---|---|
-| Personal (full) | as above | `Release\dinput8.dll` |
-| Public release | add `/p:ExtraDefines=BFVPLUS_PUBLIC` | `ReleasePublic\dinput8.dll` |
-
-`BFVPLUS_PUBLIC` compiles out the keyhash override — a debugging aid for testing
-your own unpure server under a chosen identity, which is not shipped publicly.
-It is compiled out rather than merely disabled, so none of its code or strings
-are present in the public binary.
+Define `BFVPLUS_PUBLIC` to compile the keyhash changer out entirely (none of its
+code or strings are in the binary):
 
 ```bash
 msbuild bfvplus.vcxproj /p:Configuration=Release /p:Platform=Win32 /p:ExtraDefines=BFVPLUS_PUBLIC /p:OutDir=ReleasePublic\ /p:IntDir=ReleasePublic\obj\
 ```
 
-## Install
+Output: `ReleasePublic\dinput8.dll`.
 
-1. Find your BFV install folder (the one containing `BfVietnam.exe`).
-2. Copy `dinput8.dll` from `Release\` into that folder.
-3. Start the game. A `bfvplus.ini` will be created next to `BfVietnam.exe`
-   on first launch with the default preset color cycle.
+### Tests and tools
 
-## INI format
-
-```ini
-[presetcolors]
-color = #00ff00   ; green (BFV default)
-color = #ffff00   ; yellow
-color = #ff0000   ; red
-color = #00aaff   ; light blue
-```
-
-- Order matters. The cycle follows the order of entries in the file.
-- After the last entry, the cycle wraps back to the first.
-- Add as many entries as you want.
-- The INI is read once at game start. Restart the game to apply changes.
+- `tests/run.sh` builds and runs the replay recorder's unit tests with g++ (Linux
+  or WSL).
+- `tools/check_exes.py` checks every patched site in `src/bfv_addresses.h`
+  against one or more `BfVietnam.exe` files.
+- `tools/check_view.py <replay file>` checks a recording's `cam` and `in` rows
+  against the soldier, aim and rounds in the same file.
 
 ## Uninstall
 
 Delete `dinput8.dll` from the BFV folder. The game falls back to the system
 `dinput8.dll` automatically. Existing buddy colors stay in
 `settings\profiles\<profile>\buddylist.con` regardless of whether bfvplus
-is loaded — they're a native BFV feature.
+is loaded — they're a native BFV feature. Delete `bfvplus.ini`, `keyhash.txt`,
+`logs\bfvplus*.log` and `replays\` too if you want every trace gone.
 
 ## Notes
 
-- Targets BFV **v1.21** specifically (binary timestamp Oct 2004,
-  MD5 `0c3d8058b6e1ae76bb4da7618d2b9478`). Some community patches like
-  BFV Redux may keep the same binary; the mod will work if so. If
-  `BfVietnam.exe` has been modified more substantially, the mod silently
-  does nothing — sound/input still work, but the button cycle won't be
-  active.
+- Targets BFV **v1.21**. Every hook checks the bytes it patches before
+  patching, so on a different patch level or a substantially modified
+  `BfVietnam.exe` the affected feature does nothing (sound and input still work)
+  and, for the recorder and the keyhash changer, says so in its log.
+  `tools/check_exes.py` shows which sites match a given exe.
 - Per-buddy colors are persisted to
   `Settings\Profiles\<your profile>\BuddyList.con` after every cycle.
   The mod calls BFV's own save function at `0x54B2D0` immediately after
@@ -251,7 +332,20 @@ The hook didn't install. Either:
 Check `bfvplus.ini` is next to `BfVietnam.exe`, not in some working
 directory. Restart the game after editing.
 
+**No replay files appear.**
+Check `recordReplays = on` under `[replay]`, then look in `logs\bfvplus.log`
+for a line saying why the recorder switched off. Under `Program Files`, look in
+`%LOCALAPPDATA%\VirtualStore` (see section 5).
+
+**The keyhash changer does nothing.**
+Check `logs\bfvplus_keyhash.log`: it says whether an override was read, whether
+the hook was installed, and each time it was applied. The value must be exactly
+32 hex characters. On a server that checks CD keys it can't take effect (see
+section 4).
+
 ## Acknowledgements
 
 - uuuzbf/bf42plus for the original BF1942 implementation and the pattern
   this is modeled after.
+- Skandia for the Battlefield 1942 replay recorder the client recorder is
+  based on, and the replay format and viewer it writes for.

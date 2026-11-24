@@ -38,7 +38,7 @@
 
 namespace {
 
-const char* const kVersion = "0.3-dev";
+const char* const kVersion = "0.6";
 const size_t kPayloadBytes = 128;   // the longest event the decoder reads (setLevel: two char[64])
 
 std::mutex g_mu;   // the game's events and polls share one thread (Session A); detach comes from another
