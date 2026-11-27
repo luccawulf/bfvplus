@@ -8,8 +8,8 @@ A small `dinput8.dll` mod for **Battlefield Vietnam v1.21**. Five features:
    doubled while moving on foot. Off by default.
 3. **Stationary MG sensitivity** — keeps your on-foot mouse feel on a stationary MG.
    Off by default.
-4. **Keyhash changer** *(new in 0.6)* — present a chosen key hash to servers that
-   don't check CD keys, instead of the one made from your CD key. Off until you set one.
+4. **Keyhash changer** *(new in 0.6)* — present a chosen key hash to servers
+   instead of the one made from your CD key. Off until you set one.
 5. **Client replay recorder** *(new in 0.6)* — records each game you join, from your
    own client, for the replay viewer. Based on Skandia's replay recorder for
    Battlefield 1942. Off by default.
@@ -20,7 +20,7 @@ Inspired by uuuzbf/bf42plus.
 
 - **Keyhash changer.** Set `[keyhash] override` in `bfvplus.ini` (or drop a
   `keyhash.txt` next to `BfVietnam.exe`) and that 32-character hash is what a
-  server that doesn't check CD keys records for you. See [section 4](#4-keyhash-changer).
+  server records for you. See [section 4](#4-keyhash-changer).
 - **Client replay recorder.** Turn on `[replay] recordReplays` and every game you
   join is written to `replays\` as a replay file: the server's events, every
   soldier and vehicle your client knows at up to 30 samples a second, damage,
@@ -138,11 +138,10 @@ When you join a server, your client answers the server's CD-key challenge. The
 first field of that answer is your **key hash**: the MD5 of your CD key, 32 hex
 characters. Servers use it as your identity (bans, admin rights, stats).
 
-The keyhash changer lets you present a **chosen** 32-character hash instead. It
-only takes effect on servers that **don't check CD keys**: those record whatever
-the first field says. A server that checks CD keys against a CD-key master compares
-that field with the rest of the answer, which is still made from your real key, so
-a changed hash won't match there. Leave the changer off for those servers.
+The keyhash changer lets you present a **chosen** 32-character hash instead.
+Almost every server checks CD keys, and the hash you set is the identity a
+server records for you either way — checking or not. Use a **real** key hash,
+one made from a valid CD key: that is what servers accept.
 
 ```ini
 [keyhash]
@@ -340,8 +339,7 @@ for a line saying why the recorder switched off. Under `Program Files`, look in
 **The keyhash changer does nothing.**
 Check `logs\bfvplus_keyhash.log`: it says whether an override was read, whether
 the hook was installed, and each time it was applied. The value must be exactly
-32 hex characters. On a server that checks CD keys it can't take effect (see
-section 4).
+32 hex characters, and a real key hash (see section 4).
 
 ## Acknowledgements
 
